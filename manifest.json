@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Krystal QP — Quick Position",
-  "version": "0.7.0",
-  "description": "Быстрый вход в пул на Krystal: сумма и диапазон в один клик, с проверкой перед нажатием. Подпись остаётся в кошельке.",
+  "version": "0.8.0",
+  "description": "Быстрый вход в пул на Krystal: сумма и диапазон в один клик. Кнопку Add Liquidity не нажимает.",
   "permissions": [
     "storage"
   ],

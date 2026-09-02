@@ -110,7 +110,8 @@ window.KQPPanel = (() => {
                    `низ ${pct(r.got.lo)}, верх ${pct(r.got.hi)} от цены\n` +
                    `${r.got.lo ?? '—'} … ${r.got.hi ?? '—'}\n` +
                    `(просил ${(-r.asked.widthPct).toFixed(0)}% и ` +
-                   `${(-r.asked.gapPct).toFixed(0)}%; сайт садит на свой шаг)`;
+                   `${(-r.asked.gapPct).toFixed(0)}%; сайт садит на свой шаг)` +
+                   (r.asked.unitsSwitched ? '\nцену переключил в доллары' : '');
       if (bad.length) {
         // Расхождение не прячем. Приложение могло переписать границы —
         // владелец должен увидеть это ДО подписи, а не после.
@@ -128,16 +129,8 @@ window.KQPPanel = (() => {
         status(line + '\nзаполнено, но цену взял как середину границ — ' +
                'второй раз подряд не жми, диапазон уедет. Покажи надпись ' +
                'с ценой через «Указать поля»', 'err');
-      } else if (alsoSubmit) {
-        // Нажимаем кнопку сами, только если все проверки сошлись.
-        // Подпись всё равно за владельцем — её делает кошелёк, не мы.
-        const s2 = A.submit(r, shape);
-        status(s2.clicked
-          ? line + `\nнажал «${s2.text}» — подтверди в кошельке`
-          : line + `\nНЕ НАЖАЛ: ${s2.why}. Проверь и нажми сам`,
-          s2.clicked ? 'ok' : 'err');
       } else {
-        status(line + '\nготово — проверь и подписывай сам', 'ok');
+        status(line + '\nготово — жми Add Liquidity сам', 'ok');
       }
       await S.save({ lastAmount: amount, lastWidth: width, lastShape: shape,
                      lastGap: gap });
@@ -228,7 +221,6 @@ window.KQPPanel = (() => {
         <div><div class="lbl">ширина %</div><div class="row" id="kqp-w"></div></div>
         <div><div class="lbl">отступ от цены %</div><div class="row" id="kqp-g"></div></div>
         <button class="go">Заполнить</button>
-        <button class="goadd">Заполнить и добавить</button>
         <div class="row">
           <button class="probe" style="flex:1">Проверить</button>
           <button class="teach" style="flex:1">Указать поля</button>
@@ -263,7 +255,6 @@ window.KQPPanel = (() => {
     };
     drawShapes();
     root.querySelector('.go').onclick = () => go(false);
-    root.querySelector('.goadd').onclick = () => go(true);
     root.querySelector('.teach').onclick = teach;
     root.querySelector('.probe').onclick = probe;
     root.querySelector('.reset').onclick = reset;

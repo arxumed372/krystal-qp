@@ -17,7 +17,14 @@
      упало у владельца — "#chakra-modal--body-:ro0:" недопустим в CSS. -->
 <!-- Кнопка, которой окно открывают: лежит ЗА окном. Владелец на неё
      напоролся — расширение видело две кнопки и отказывалось нажимать. -->
-<button id="bgAdd">Add Liquidity</button>
+<!-- Страница ПОД окном: у неё свои Min/Max и своя кнопка. Именно из-за них
+     поиск по всему документу находил поля дважды и отказывался работать. -->
+<div id="behind">
+  <div>Min Price</div><input id="bgLo" inputmode="decimal" value="1">
+  <div>Max Price</div><input id="bgHi" inputmode="decimal" value="2">
+  <div>Current Price 999 FAKE per USDG</div>
+  <button id="bgAdd">Add Liquidity</button>
+</div>
 <div id="chakra-modal--body-:ro0:" role="dialog">
 
 <h3>Add liquidity — JINQIAN/USDG</h3>

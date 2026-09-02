@@ -165,17 +165,50 @@ window.KQPDom = (() => {
   // Разметку я увидел по скринам владельца, поэтому поля теперь ищутся сами,
   // а показ мышью остаётся запасным путём. Ищем по ВИДИМОЙ ПОДПИСИ, а не по
   // классам: подпись «Min Price» — часть интерфейса, класс — деталь сборки.
-  function inputNear(labelRe) {
-    const hits = allVisible('input').filter(el => {
+  // ── Окно Add Liquidity — единственная область поиска ─────────────────────
+  //
+  // За окном лежит обычная страница пула, и на ней ТОЖЕ есть поля границ и
+  // кнопка Add Liquidity. Пока поиск шёл по всему документу, полей находилось
+  // по два, и расширение честно отказывалось работать: «не нахожу поля».
+  // Владелец поймал это дважды. Теперь у поиска есть границы.
+  function dialogRoot() {
+    const marks = allVisible('*').filter(el => {
+      if (el.children.length > 4) return false;
+      return /^\s*min\s*price\s*$/i.test(textOf(el));
+    });
+    for (const m of marks) {
+      let n = m;
+      while (n && n !== document.body) {
+        const id = n.id || '';
+        const cls = typeof n.className === 'string' ? n.className : '';
+        if ((n.getAttribute && n.getAttribute('role') === 'dialog') ||
+            /modal|dialog|drawer/i.test(id) || /modal|dialog|drawer/i.test(cls)) {
+          return n;
+        }
+        n = n.parentElement;
+      }
+    }
+    return null;
+  }
+
+  // Корень для всех поисков: окно, если оно есть, иначе весь документ.
+  function scope() {
+    return dialogRoot() || document;
+  }
+
+  function inputNear(labelRe, root) {
+    const hits = allVisible('input', root || scope()).filter(el => {
       const l = nearbyLabel(el) || '';
       return labelRe.test(l);
     });
-    return hits.length === 1 ? hits[0] : null;
+    // Если внутри окна нашлось несколько — берём ПЕРВОЕ, они одинаковы
+    // по смыслу; ноль означает, что искать нечего.
+    return hits.length ? hits[0] : null;
   }
 
   // Надпись с текущей ценой: «Current Price 0.009975 USDG per JINQIAN».
   function priceNode() {
-    const nodes = allVisible('*').filter(el => {
+    const nodes = allVisible('*', scope()).filter(el => {
       if (el.children.length > 3) return false;
       return /current\s+price/i.test(textOf(el));
     });
@@ -192,7 +225,7 @@ window.KQPDom = (() => {
   // Если их два — значит диапазон двусторонний и мы не можем доказать,
   // в какое класть. Тогда возвращаем null: отказ честнее догадки.
   function amountInput(exclude) {
-    const rest = allVisible('input').filter(el => !exclude.includes(el));
+    const rest = allVisible('input', scope()).filter(el => !exclude.includes(el));
     const numeric = rest.filter(el => {
       const t = (el.getAttribute('inputmode') || el.type || '').toLowerCase();
       return t === 'decimal' || t === 'numeric' || t === 'number' || t === 'text';
@@ -202,7 +235,7 @@ window.KQPDom = (() => {
 
   // Вкладка Manual против Zap In. Владелец работает в Manual.
   function manualTab() {
-    return allVisible('button, [role="tab"]')
+    return allVisible('button, [role="tab"]', scope())
       .find(el => /^\s*(?:👆|✋)?\s*manual\s*$/i.test(textOf(el))) || null;
   }
 
@@ -216,24 +249,8 @@ window.KQPDom = (() => {
   // Окно Add Liquidity. За ним на странице лежит вторая кнопка «Add Liquidity»
   // — та, которой окно открывают. Владелец на неё и напоролся: расширение
   // увидело две и честно отказалось нажимать. Ищем только внутри окна.
-  function modalRoot() {
-    const anchor = inputNear(/min\s*price/i);
-    let n = anchor;
-    while (n && n !== document.body) {
-      const id = n.id || '';
-      const cls = typeof n.className === 'string' ? n.className : '';
-      if ((n.getAttribute && n.getAttribute('role') === 'dialog') ||
-          /modal|dialog|drawer/i.test(id) || /modal|dialog|drawer/i.test(cls)) {
-        return n;
-      }
-      n = n.parentElement;
-    }
-    return null;
-  }
-
   function submitButton() {
-    const root = modalRoot();
-    const btns = allVisible('button', root || document).filter(el => {
+    const btns = allVisible('button', scope()).filter(el => {
       const t = textOf(el).replace(/\s+/g, ' ').trim();
       return /^add liquidity$/i.test(t) || /^approve\b/i.test(t);
     });
@@ -280,7 +297,7 @@ window.KQPDom = (() => {
     // Сейчас знаменатель — стейбл, а нам нужен обратный вид. Жмём имя
     // НЕстейбла: выбранное имя как раз и становится знаменателем.
     const want = STABLE.test(u.per) ? u.unit : u.per;
-    const btn = allVisible('button, [role="tab"], [role="radio"]')
+    const btn = allVisible('button, [role="tab"], [role="radio"]', scope())
       .find(el => textOf(el).replace(/\s+/g, ' ').trim().toUpperCase()
                   === want.toUpperCase());
     if (!btn) return { ok: false, why: `кнопки «${want}» над графиком не нашёл` };
@@ -303,5 +320,6 @@ window.KQPDom = (() => {
 
   return { visible, textOf, describe, find, setReactValue, pressEnter, num,
            snapshot, nearbyLabel, autoFields, manualTab, priceNode, amountInput,
-           submitButton, modalRoot, priceUnits, priceIsStable, switchPriceUnits };
+           submitButton, dialogRoot, scope, priceUnits, priceIsStable,
+           switchPriceUnits };
 })();

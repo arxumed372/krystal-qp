@@ -34,11 +34,18 @@ window.KQPSettings = (() => {
     settleMs: 700,
   };
 
+  // Списки заготовок ВСЕГДА берутся из кода, а не из памяти. Иначе первая же
+  // запись настроек замораживает старые значения навсегда: владелец обновил
+  // расширение, а ширины остались прежние — ровно это и произошло.
+  const FROM_CODE = ['amounts', 'widths', 'gaps'];
+
   async function load() {
     return new Promise(res => {
       try {
         chrome.storage.local.get(KEY, (o) => {
-          res({ ...DEFAULTS, ...((o && o[KEY]) || {}) });
+          const saved = { ...((o && o[KEY]) || {}) };
+          for (const k of FROM_CODE) delete saved[k];
+          res({ ...DEFAULTS, ...saved });
         });
       } catch (e) {
         res({ ...DEFAULTS });
@@ -49,9 +56,11 @@ window.KQPSettings = (() => {
   async function save(patch) {
     const cur = await load();
     const next = { ...cur, ...patch };
+    for (const k of FROM_CODE) delete next[k];
     return new Promise(res => {
       try {
-        chrome.storage.local.set({ [KEY]: next }, () => res(next));
+        chrome.storage.local.set({ [KEY]: next },
+                                 () => res({ ...DEFAULTS, ...next }));
       } catch (e) {
         res(next);
       }

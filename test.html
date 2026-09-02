@@ -44,11 +44,13 @@
     <div style="margin-top:12px">
       <div>Min Price</div>
       <input id="lo" inputmode="decimal">
+      <button id="loMinus">−</button><button id="loPlus">+</button>
       <div>JINQIAN per USDG</div>
     </div>
     <div style="margin-top:12px">
       <div>Max Price</div>
       <input id="hi" inputmode="decimal">
+      <button id="hiMinus">−</button><button id="hiPlus">+</button>
       <div>JINQIAN per USDG</div>
     </div>
   </div>
@@ -126,6 +128,21 @@ function checkInvariant() {
   if (isFinite(a) && isFinite(b) && a >= b) window.invariant = 'Invariant failed';
 }
 for (const k of ['lo','hi']) els[k].addEventListener('input', checkInvariant);
+// Шаг границы, как у настоящего пула: приложение считает сам.
+const STEP = 0.0004;
+window.nudged = 0;
+const bump = (key, dir) => {
+  const v = parseFloat(state[key]);
+  if (!isFinite(v)) return;
+  state[key] = String(Number((v + dir*STEP).toFixed(10)));
+  els[key].value = state[key];
+  window.nudged++;
+  relayout();
+};
+loPlus.onclick = () => bump('lo', +1);
+loMinus.onclick = () => bump('lo', -1);
+hiPlus.onclick = () => bump('hi', +1);
+hiMinus.onclick = () => bump('hi', -1);
 window.REMOUNT = false;
 function remountAmount() {
   const old = els.amtUsdg;

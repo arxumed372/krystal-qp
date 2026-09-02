@@ -231,6 +231,9 @@ window.KQPPanel = (() => {
           <button class="teach" style="flex:1">Указать поля</button>
           <button class="reset">Сброс</button>
         </div>
+        <div class="row">
+          <button class="nudge" style="flex:1">Подтолкнуть</button>
+        </div>
         <div class="st"></div>
       </div>`;
     document.body.appendChild(root);
@@ -263,6 +266,20 @@ window.KQPPanel = (() => {
     root.querySelector('.teach').onclick = teach;
     root.querySelector('.probe').onclick = probe;
     root.querySelector('.reset').onclick = reset;
+    root.querySelector('.nudge').onclick = async () => {
+      try {
+        status('жму + и − у границ…');
+        const r = await A.nudge(cfg, m => status(m));
+        const same = (a, b) => (a == null || b == null)
+          ? false : Math.abs(a - b) / Math.abs(b || 1) < 1e-9;
+        status(`было ${r.before.lo} … ${r.before.hi}\n` +
+               `стало ${r.after.lo} … ${r.after.hi}\n` +
+               (same(r.before.lo, r.after.lo) && same(r.before.hi, r.after.hi)
+                 ? 'границы те же — теперь пробуй Add Liquidity'
+                 : 'ВНИМАНИЕ: границы сдвинулись, проверь их перед нажатием'),
+               'ok');
+      } catch (e) { status(e.message, 'err'); }
+    };
     root.querySelector('.x').onclick = () => root.remove();
     drag(root.querySelector('header'), root);
 

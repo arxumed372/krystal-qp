@@ -343,6 +343,19 @@ window.KQPDom = (() => {
     return { ok: true, changed: true, clicked: want };
   }
 
+  // Кнопки шага «плюс» и «минус» рядом с полем границы.
+  function stepButtons(inputEl) {
+    if (!inputEl) return { plus: null, minus: null };
+    let box = inputEl.parentElement;
+    for (let i = 0; i < 4 && box; i++, box = box.parentElement) {
+      const bs = allVisible('button', box);
+      const plus = bs.find(b => /^[+＋]$/.test(textOf(b)));
+      const minus = bs.find(b => /^[-−–—]$/.test(textOf(b)));
+      if (plus && minus) return { plus, minus };
+    }
+    return { plus: null, minus: null };
+  }
+
   function autoFields() {
     const lo = inputNear(/min\s*price/i);
     const hi = inputNear(/max\s*price/i);
@@ -359,5 +372,5 @@ window.KQPDom = (() => {
   return { visible, textOf, describe, find, setReactValue, pressEnter, num,
            snapshot, nearbyLabel, autoFields, manualTab, priceNode, amountInput,
            submitButton, dialogRoot, scope, priceUnits, priceIsStable,
-           switchPriceUnits, depositRoot, amountInputs };
+           switchPriceUnits, depositRoot, amountInputs, stepButtons };
 })();

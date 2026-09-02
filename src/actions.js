@@ -273,5 +273,39 @@ window.KQPActions = (() => {
     };
   }
 
-  return { fill, currentPrice, round, bounds, ensureManual, submit };
+  // «Подтолкнуть»: нажать плюс и следом минус у каждой границы.
+  //
+  // Смысл — заставить Krystal пересчитать тики СВОИМ механизмом. Значение
+  // возвращается на место, а внутреннее состояние приложения при этом
+  // рождается его же кодом, а не нашей записью в поле. Если после этого
+  // «Invariant failed» пропадает — значит наша запись не доезжала до
+  // внутреннего состояния, и это прямая улика.
+  async function nudge(cfg, report) {
+    let fields = (cfg.fields && cfg.fields.minPrice) ? cfg.fields : D.autoFields();
+    if (!fields) throw new Error('полей не вижу — открой окно Add Liquidity');
+    const before = {
+      lo: D.num((D.find(fields.minPrice) || {}).value),
+      hi: D.num((D.find(fields.maxPrice) || {}).value),
+    };
+    let touched = 0;
+    for (const key of ['minPrice', 'maxPrice']) {
+      const el = D.find(fields[key]);
+      const { plus, minus } = D.stepButtons(el);
+      if (!plus || !minus) continue;
+      plus.click();
+      await sleep(500);
+      minus.click();
+      await sleep(500);
+      touched++;
+    }
+    if (!touched) throw new Error('кнопок + и − рядом с границами не нашёл');
+    await settle(fields, { timeout: cfg.settleMs * 6 });
+    const after = {
+      lo: D.num((D.find(fields.minPrice) || {}).value),
+      hi: D.num((D.find(fields.maxPrice) || {}).value),
+    };
+    return { before, after, touched };
+  }
+
+  return { fill, currentPrice, round, bounds, ensureManual, submit, nudge };
 })();

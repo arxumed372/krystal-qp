@@ -203,6 +203,25 @@ window.KQPDom = (() => {
   // два, и это нормальное начальное состояние окна — отказываться на нём
   // нельзя. Сумму ищем позже, когда верхняя граница уже ушла под цену и
   // второе поле исчезло.
+  // Кнопка подтверждения. Ищем по точному тексту: «Add Liquidity» или
+  // «Approve USDG» на первом заходе. Нажимать что-то похожее нельзя —
+  // это кнопка, после которой кошелёк просит подпись.
+  function submitButton() {
+    const btns = allVisible('button').filter(el => {
+      const t = textOf(el).replace(/\s+/g, ' ').trim();
+      return /^add liquidity$/i.test(t) || /^approve\b/i.test(t);
+    });
+    if (btns.length !== 1) return { el: null, why: btns.length
+      ? 'таких кнопок несколько — не понимаю, какая нужна'
+      : 'кнопки Add Liquidity не вижу' };
+    const el = btns[0];
+    const off = el.disabled ||
+                /true/i.test(el.getAttribute('aria-disabled') || '') ||
+                getComputedStyle(el).pointerEvents === 'none';
+    if (off) return { el: null, why: `кнопка «${textOf(el)}» неактивна` };
+    return { el, why: null, text: textOf(el).replace(/\s+/g, ' ').trim() };
+  }
+
   function autoFields() {
     const lo = inputNear(/min\s*price/i);
     const hi = inputNear(/max\s*price/i);
@@ -217,5 +236,6 @@ window.KQPDom = (() => {
   }
 
   return { visible, textOf, describe, find, setReactValue, pressEnter, num,
-           snapshot, nearbyLabel, autoFields, manualTab, priceNode, amountInput };
+           snapshot, nearbyLabel, autoFields, manualTab, priceNode, amountInput,
+           submitButton };
 })();

@@ -30,6 +30,9 @@ window.KQPPanel = (() => {
   .kqp .go { width:100%; padding:9px; font-weight:600; background:#2563eb;
              border-color:#2563eb; color:#fff; }
   .kqp .go:hover { background:#1d4ed8; }
+  .kqp .goadd { width:100%; padding:9px; font-weight:600; background:#16a34a;
+                border-color:#16a34a; color:#fff; }
+  .kqp .goadd:hover { background:#15803d; }
   .kqp .teach, .kqp .probe, .kqp .reset { font-size:12px; }
   .kqp .st { font-size:11.5px; color:#94a3b8; min-height:30px; white-space:pre-wrap;
              word-break:break-word; }
@@ -56,7 +59,7 @@ window.KQPPanel = (() => {
     }
   }
 
-  async function go() {
+  async function go(alsoSubmit) {
     try {
       status('заполняю…');
       const r = await A.fill({ amount, widthPct: width, shape, gapPct: gap },
@@ -95,6 +98,14 @@ window.KQPPanel = (() => {
         status(line + '\nзаполнено, но цену взял как середину границ — ' +
                'второй раз подряд не жми, диапазон уедет. Покажи надпись ' +
                'с ценой через «Указать поля»', 'err');
+      } else if (alsoSubmit) {
+        // Нажимаем кнопку сами, только если все проверки сошлись.
+        // Подпись всё равно за владельцем — её делает кошелёк, не мы.
+        const s2 = A.submit(r, shape);
+        status(s2.clicked
+          ? line + `\nнажал «${s2.text}» — подтверди в кошельке`
+          : line + `\nНЕ НАЖАЛ: ${s2.why}. Проверь и нажми сам`,
+          s2.clicked ? 'ok' : 'err');
       } else {
         status(line + '\nготово — проверь и подписывай сам', 'ok');
       }
@@ -187,6 +198,7 @@ window.KQPPanel = (() => {
         <div><div class="lbl">ширина %</div><div class="row" id="kqp-w"></div></div>
         <div><div class="lbl">отступ от цены %</div><div class="row" id="kqp-g"></div></div>
         <button class="go">Заполнить</button>
+        <button class="goadd">Заполнить и добавить</button>
         <div class="row">
           <button class="probe" style="flex:1">Проверить</button>
           <button class="teach" style="flex:1">Указать поля</button>
@@ -220,7 +232,8 @@ window.KQPPanel = (() => {
       }
     };
     drawShapes();
-    root.querySelector('.go').onclick = go;
+    root.querySelector('.go').onclick = () => go(false);
+    root.querySelector('.goadd').onclick = () => go(true);
     root.querySelector('.teach').onclick = teach;
     root.querySelector('.probe').onclick = probe;
     root.querySelector('.reset').onclick = reset;

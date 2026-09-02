@@ -84,6 +84,26 @@ window.KQPActions = (() => {
     return true;
   }
 
+  // Нажатие кнопки подтверждения. Отдельная работа со своими условиями:
+  // после неё кошелёк просит подпись, поэтому любое сомнение — отказ.
+  // Подпись остаётся за владельцем, её расширение не делает и делать не может.
+  function submit(r, shape) {
+    const stop = (why) => ({ clicked: false, why });
+    if (r.drift.amount == null || r.drift.amount > 1) {
+      return stop('сумма в поле не та, что просили');
+    }
+    if (shape === 'down' && !r.oneSided) {
+      return stop('позиция осталась двусторонней');
+    }
+    if (r.asked.priceSrc !== 'надпись') {
+      return stop('цену взял как середину границ, а не из строки Current Price');
+    }
+    const b = D.submitButton();
+    if (!b.el) return stop(b.why);
+    b.el.click();
+    return { clicked: true, text: b.text };
+  }
+
   async function fill({ amount, widthPct, shape = 'down', gapPct = 3 },
                       cfg, report) {
     // Сначала пробуем узнать поля сами — разметка известна по снимкам.
@@ -179,5 +199,5 @@ window.KQPActions = (() => {
     };
   }
 
-  return { fill, currentPrice, round, bounds, ensureManual };
+  return { fill, currentPrice, round, bounds, ensureManual, submit };
 })();

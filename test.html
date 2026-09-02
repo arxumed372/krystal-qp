@@ -88,6 +88,10 @@ manual.onclick = () => { manual.setAttribute('aria-selected','true');
 zap.onclick = () => { zap.setAttribute('aria-selected','true');
                       manual.setAttribute('aria-selected','false'); };
 
+window.clicked = null;
+document.getElementById('add').addEventListener('click', () => {
+  window.clicked = document.getElementById('add').textContent;
+});
 window.readState = () => ({ ...state, второеПолеВидно: jinBox.style.display !== 'none' });
 window.resetAll = () => {
   state.lo='0.007836563167142053'; state.hi='0.014364646284887317';

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Krystal QP — Quick Position",
-  "version": "0.4.0",
-  "description": "Быстрый вход в пул на Krystal: сумма и ширина диапазона в один клик. Поля указываются мышью один раз.",
+  "version": "0.5.0",
+  "description": "Быстрый вход в пул на Krystal: сумма и диапазон в один клик, с проверкой перед нажатием. Подпись остаётся в кошельке.",
   "permissions": [
     "storage"
   ],

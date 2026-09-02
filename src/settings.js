@@ -1,0 +1,50 @@
+// Настройки и память расширения.
+//
+// Хранится ДВЕ вещи: заготовки сумм и ширин диапазона, и выученные поля.
+// Выученные поля привязаны к домену, а не к конкретному пулу — разметка
+// страницы у всех пулов одна.
+window.KQPSettings = (() => {
+  const KEY = 'krystal-qp';
+
+  const DEFAULTS = {
+    // Суммы в долларах. Владелец жал одни и те же значения руками —
+    // теперь они кнопками.
+    amounts: [50, 100, 250, 500],
+    // Ширина диапазона в процентах ОТ ТЕКУЩЕЙ ЦЕНЫ, в обе стороны.
+    widths: [2, 5, 10, 20],
+    // Последнее выбранное, чтобы не тыкать заново.
+    lastAmount: 100,
+    lastWidth: 5,
+    // Выученные поля: {amount:{...}, minPrice:{...}, maxPrice:{...}}
+    fields: null,
+    // Пауза между вводом полей: приложение пересчитывает диапазон, и если
+    // писать подряд без ожидания, второе значение затирается первым.
+    settleMs: 700,
+  };
+
+  async function load() {
+    return new Promise(res => {
+      try {
+        chrome.storage.local.get(KEY, (o) => {
+          res({ ...DEFAULTS, ...((o && o[KEY]) || {}) });
+        });
+      } catch (e) {
+        res({ ...DEFAULTS });
+      }
+    });
+  }
+
+  async function save(patch) {
+    const cur = await load();
+    const next = { ...cur, ...patch };
+    return new Promise(res => {
+      try {
+        chrome.storage.local.set({ [KEY]: next }, () => res(next));
+      } catch (e) {
+        res(next);
+      }
+    });
+  }
+
+  return { load, save, DEFAULTS };
+})();

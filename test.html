@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Двойник формы Krystal для проверки Krystal QP</title>
+<!--
+  Страница-двойник. Настоящий сайт закрыт Cloudflare для автоматических
+  браузеров, поэтому проверяю механику на форме с такими же свойствами:
+  поля управляются приложением (как в React), приложение пересчитывает
+  границы после ввода, и умеет вести себя враждебно — переписывать нижнюю
+  границу после верхней. Именно эту враждебность и надо поймать.
+-->
+<body style="font:14px system-ui;padding:20px;background:#f8fafc">
+<h3>Пул TOKEN / USDC</h3>
+<div><label>Amount</label><br><input id="amt" inputmode="decimal" placeholder="0.0"></div>
+<div><label>Min Price</label><br><input id="lo" inputmode="decimal"></div>
+<div><label>Max Price</label><br><input id="hi" inputmode="decimal"></div>
+<p>Текущая цена: <b id="px">2.5</b></p>
+
+<script>
+// Имитация управляемых полей: значение живёт в состоянии, поле лишь его
+// отражает. Прямое присваивание value состояние НЕ меняет — ровно как в React.
+const state = { amt: '', lo: '2.25', hi: '2.75' };
+const els = { amt: amt, lo: lo, hi: hi };
+// Режим враждебности: приложение переписывает нижнюю границу после ввода.
+window.HOSTILE = false;
+
+for (const [k, el] of Object.entries(els)) {
+  el.value = state[k];
+  el.addEventListener('input', () => {
+    state[k] = el.value;
+    if (window.HOSTILE && k === 'lo') {
+      setTimeout(() => { state.lo = '1.00'; el.value = '1.00'; }, 50);
+    }
+  });
+}
+window.readState = () => ({ ...state });
+</script>
+
+<script src="/src/settings.js"></script>
+<script src="/src/dom.js"></script>
+<script src="/src/teach.js"></script>
+<script src="/src/actions.js"></script>
+
+<script>
+// Драйвер проверки: подставляем «выученные» поля так же, как это сделало бы
+// обучение мышью, и прогоняем сценарий.
+window.runTest = async (widthPct, hostile) => {
+  window.HOSTILE = !!hostile;
+  state.lo = '2.25'; state.hi = '2.75'; state.amt = '';
+  els.lo.value = '2.25'; els.hi.value = '2.75'; els.amt.value = '';
+  const D = window.KQPDom;
+  const cfg = {
+    settleMs: 200,
+    fields: {
+      amount: D.describe(els.amt),
+      minPrice: D.describe(els.lo),
+      maxPrice: D.describe(els.hi),
+    },
+  };
+  try {
+    const r = await window.KQPActions.fill({ amount: 100, widthPct }, cfg, () => {});
+    return { ok: true, ...r, state: window.readState() };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+};
+window.describeTest = () => {
+  const D = window.KQPDom;
+  const d = D.describe(els.lo);
+  return { описание: d, нашёлся: D.find(d) === els.lo };
+};
+</script>

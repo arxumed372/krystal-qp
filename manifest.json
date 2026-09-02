@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Krystal QP — Quick Position",
+  "version": "0.1.0",
+  "description": "Быстрый вход в пул на Krystal: сумма и ширина диапазона в один клик. Поля указываются мышью один раз.",
+  "permissions": [
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://defi.krystal.app/*",
+        "https://*.krystal.app/*"
+      ],
+      "js": [
+        "src/settings.js",
+        "src/dom.js",
+        "src/teach.js",
+        "src/actions.js",
+        "src/panel.js",
+        "src/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

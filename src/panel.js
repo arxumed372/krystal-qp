@@ -1,0 +1,140 @@
+// Плавающая панель: суммы, ширина диапазона, кнопка входа.
+//
+// Панель НИЧЕГО не подписывает и не нажимает кнопку подтверждения. Она только
+// заполняет поля. Последний клик — за владельцем, в его кошельке.
+window.KQPPanel = (() => {
+  const S = window.KQPSettings;
+  const T = window.KQPTeach;
+  const A = window.KQPActions;
+
+  let root = null, cfg = null, statusEl = null;
+  let amount = null, width = null;
+
+  const css = `
+  .kqp { position:fixed; right:16px; bottom:16px; z-index:2147483646;
+         width:250px; background:#0f172a; color:#e2e8f0; border-radius:12px;
+         font:13px/1.35 system-ui,-apple-system,sans-serif;
+         box-shadow:0 10px 34px rgba(0,0,0,.5); border:1px solid #1e293b; }
+  .kqp header { padding:9px 12px; font-weight:600; display:flex;
+                justify-content:space-between; align-items:center;
+                border-bottom:1px solid #1e293b; cursor:move; }
+  .kqp .body { padding:10px 12px; display:flex; flex-direction:column; gap:9px; }
+  .kqp .lbl { color:#94a3b8; font-size:11px; text-transform:uppercase;
+              letter-spacing:.04em; }
+  .kqp .row { display:flex; gap:6px; flex-wrap:wrap; }
+  .kqp button { background:#1e293b; color:#e2e8f0; border:1px solid #334155;
+                border-radius:7px; padding:5px 9px; cursor:pointer; font:inherit; }
+  .kqp button:hover { background:#334155; }
+  .kqp button.on { background:#16a34a; border-color:#16a34a; color:#fff; }
+  .kqp .go { width:100%; padding:9px; font-weight:600; background:#2563eb;
+             border-color:#2563eb; color:#fff; }
+  .kqp .go:hover { background:#1d4ed8; }
+  .kqp .teach { width:100%; }
+  .kqp .st { font-size:11.5px; color:#94a3b8; min-height:30px; white-space:pre-wrap;
+             word-break:break-word; }
+  .kqp .st.err { color:#fca5a5; }
+  .kqp .st.ok { color:#86efac; }
+  .kqp .x { cursor:pointer; color:#64748b; }
+  `;
+
+  function status(text, kind) {
+    if (!statusEl) return;
+    statusEl.className = 'st' + (kind ? ' ' + kind : '');
+    statusEl.textContent = text;
+  }
+
+  function chips(host, values, suffix, get, set) {
+    host.innerHTML = '';
+    for (const v of values) {
+      const b = document.createElement('button');
+      b.textContent = v + suffix;
+      if (get() === v) b.classList.add('on');
+      b.onclick = () => { set(v); chips(host, values, suffix, get, set); };
+      host.appendChild(b);
+    }
+  }
+
+  async function go() {
+    try {
+      status('заполняю…');
+      const r = await A.fill({ amount, widthPct: width }, cfg, m => status(m));
+      const d = r.drift;
+      const bad = ['amount', 'lo', 'hi'].filter(k => d[k] == null || d[k] > 1);
+      const line = `сумма ${r.got.amount ?? '—'}\n` +
+                   `диапазон ${r.got.lo ?? '—'} … ${r.got.hi ?? '—'}\n` +
+                   `(просил ${A.round(r.asked.lo)} … ${A.round(r.asked.hi)})`;
+      if (bad.length) {
+        // Расхождение не прячем. Приложение могло переписать границы —
+        // владелец должен увидеть это ДО подписи, а не после.
+        status(line + `\nВНИМАНИЕ: сайт изменил ${bad.join(', ')} — проверь перед подписью`, 'err');
+      } else {
+        status(line + '\nготово — проверь и подписывай сам', 'ok');
+      }
+      await S.save({ lastAmount: amount, lastWidth: width });
+    } catch (e) {
+      status(e.message, 'err');
+    }
+  }
+
+  function teach() {
+    status('показывай поля мышью…');
+    T.start(async (fields, err) => {
+      if (err) return status(err, 'err');
+      cfg = await S.save({ fields });
+      status('поля запомнил: сумма, нижняя и верхняя границы', 'ok');
+    });
+  }
+
+  function drag(handle, box) {
+    let sx = 0, sy = 0, ox = 0, oy = 0, on = false;
+    handle.addEventListener('mousedown', (e) => {
+      on = true; sx = e.clientX; sy = e.clientY;
+      const r = box.getBoundingClientRect(); ox = r.left; oy = r.top;
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!on) return;
+      box.style.left = (ox + e.clientX - sx) + 'px';
+      box.style.top = (oy + e.clientY - sy) + 'px';
+      box.style.right = 'auto'; box.style.bottom = 'auto';
+    });
+    document.addEventListener('mouseup', () => { on = false; });
+  }
+
+  async function mount() {
+    if (root) return;
+    cfg = await S.load();
+    amount = cfg.lastAmount;
+    width = cfg.lastWidth;
+
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
+
+    root = document.createElement('div');
+    root.className = 'kqp';
+    root.innerHTML = `
+      <header><span>Krystal QP</span><span class="x" title="скрыть">✕</span></header>
+      <div class="body">
+        <div><div class="lbl">сумма</div><div class="row" id="kqp-a"></div></div>
+        <div><div class="lbl">диапазон ±%</div><div class="row" id="kqp-w"></div></div>
+        <button class="go">Заполнить</button>
+        <button class="teach">Указать поля</button>
+        <div class="st"></div>
+      </div>`;
+    document.body.appendChild(root);
+
+    statusEl = root.querySelector('.st');
+    chips(root.querySelector('#kqp-a'), cfg.amounts, '', () => amount, v => amount = v);
+    chips(root.querySelector('#kqp-w'), cfg.widths, '%', () => width, v => width = v);
+    root.querySelector('.go').onclick = go;
+    root.querySelector('.teach').onclick = teach;
+    root.querySelector('.x').onclick = () => root.remove();
+    drag(root.querySelector('header'), root);
+
+    status(cfg.fields ? 'поля выучены — можно заполнять'
+                      : 'сначала нажми «Указать поля»');
+  }
+
+  return { mount };
+})();

@@ -109,6 +109,14 @@ document.getElementById('add').addEventListener('click', () => {
 });
 // Режим «второе поле остаётся видимым» — так вело себя окно у владельца:
 // поле STRATTON исчезло с экрана, но расширение всё равно считало поля.
+// Сайт подставляет свою сумму с задержкой — ровно это поведение и подвело.
+window.OVERWRITE = 0;   // сколько раз ещё перепишет
+els.amtUsdg.addEventListener('input', () => {
+  if (window.OVERWRITE > 0 && state.amtUsdg !== '430.74') {
+    window.OVERWRITE--;
+    setTimeout(() => { state.amtUsdg='430.74'; els.amtUsdg.value='430.74'; }, 400);
+  }
+});
 window.keepSecond = (on) => { window.KEEP = !!on; relayout(); };
 window.readState = () => ({ ...state, второеПолеВидно: jinBox.style.display !== 'none' });
 window.resetAll = () => {

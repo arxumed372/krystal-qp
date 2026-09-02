@@ -192,13 +192,37 @@ window.KQPActions = (() => {
           `область Deposit Amounts ${D.depositRoot() ? 'нашёл' : 'НЕ нашёл'}). ` +
           `Впиши сумму сам или покажи поле через «Указать поля»`);
     }
+    // СУММУ ПИШЕМ С ПРОВЕРКОЙ И ПОВТОРОМ.
+    //
+    // Krystal сам подставляет в это поле свою величину, когда пересчитывает
+    // позицию, и делает это С ЗАДЕРЖКОЙ — уже после того, как поля затихли.
+    // Первая версия писала 50, тут же читала 50 и радостно отчитывалась,
+    // а через секунду на экране стояло 430. Владелец это поймал.
+    // Поэтому: написали, подождали, перечитали, и если сайт переписал —
+    // пишем снова. Три попытки, потом честный отказ.
+    const writeAmount = async () => {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const el = D.find(amtDesc) || amtEl;
+        if (!el) return null;
+        D.setReactValue(el, amount);
+        D.pressEnter(el);
+        await settle(fields, { timeout: cfg.settleMs * 6 });
+        await sleep(800);                 // даём сайту договорить своё
+        const now = D.num((D.find(amtDesc) || el).value);
+        if (now != null && amount > 0 &&
+            Math.abs(now - amount) / amount <= 0.001) {
+          return now;
+        }
+        report(`сайт поставил ${now} вместо ${amount} — вписываю снова ` +
+               `(${attempt} из 3)`);
+      }
+      return D.num((D.find(amtDesc) || amtEl || {}).value);
+    };
     report(`сумма ${amount}…`);
-    D.setReactValue(amtEl, amount);
-    D.pressEnter(amtEl);
-    await settle(fields, { timeout: cfg.settleMs * 6 });
+    const amountFinal = await writeAmount();
 
     const got = {
-      amount: D.num(((amtDesc && D.find(amtDesc)) || amtEl).value),
+      amount: amountFinal,
       lo: D.num((D.find(fields.minPrice) || {}).value),
       hi: D.num((D.find(fields.maxPrice) || {}).value),
     };

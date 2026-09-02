@@ -174,10 +174,24 @@ window.KQPActions = (() => {
 
     // Поле суммы ищем ЗАНОВО: после сужения диапазона второе поле исчезает,
     // и найденное вначале может быть уже не тем полем.
-    const amtDesc = (cfg.fields && cfg.fields.amount)
-      ? cfg.fields.amount
-      : ((D.autoFields() || {}).amount || fields.amount);
-    const amtEl = amtDesc ? D.find(amtDesc) : null;
+    // НИКАКИХ СОХРАНЁННЫХ ССЫЛОК НА УЗЕЛ.
+    //
+    // Krystal перерисовывает поле суммы, когда меняется диапазон. Старая
+    // ссылка продолжает существовать, но она уже не на странице: пишешь в
+    // неё — значение меняется, на экране ничего. Расширение отчиталось
+    // о 250, а в поле стояло 100 — ровно это.
+    // Поэтому поле ищется ЗАНОВО перед каждой записью и перед каждым
+    // чтением, и обязано быть частью живого документа.
+    const lo0 = D.find(fields.minPrice);
+    const hi0 = D.find(fields.maxPrice);
+    const amountEl = () => {
+      if (cfg.fields && cfg.fields.amount) {
+        const el = D.find(cfg.fields.amount);
+        if (el && document.contains(el)) return el;
+      }
+      return D.amountInput([lo0, hi0].filter(Boolean));
+    };
+    const amtEl = amountEl();
     if (!amtEl) {
       // Полей суммы осталось два. Для формы «вниз» это значит, что верх не
       // ушёл под цену. Для двусторонней это нормально по устройству, но тогда
@@ -201,22 +215,24 @@ window.KQPActions = (() => {
     // Поэтому: написали, подождали, перечитали, и если сайт переписал —
     // пишем снова. Три попытки, потом честный отказ.
     const writeAmount = async () => {
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        const el = D.find(amtDesc) || amtEl;
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        const el = amountEl();            // ищем заново каждый раз
         if (!el) return null;
         D.setReactValue(el, amount);
         D.pressEnter(el);
         await settle(fields, { timeout: cfg.settleMs * 6 });
-        await sleep(800);                 // даём сайту договорить своё
-        const now = D.num((D.find(amtDesc) || el).value);
+        await sleep(900);                 // даём сайту договорить своё
+        const check = amountEl();         // и читаем тоже заново
+        const now = check ? D.num(check.value) : null;
         if (now != null && amount > 0 &&
             Math.abs(now - amount) / amount <= 0.001) {
           return now;
         }
-        report(`сайт поставил ${now} вместо ${amount} — вписываю снова ` +
-               `(${attempt} из 3)`);
+        report(`в поле ${now} вместо ${amount} — вписываю снова ` +
+               `(${attempt} из 4)`);
       }
-      return D.num((D.find(amtDesc) || amtEl || {}).value);
+      const last = amountEl();
+      return last ? D.num(last.value) : null;
     };
     report(`сумма ${amount}…`);
     const amountFinal = await writeAmount();

@@ -247,6 +247,11 @@ window.KQPDom = (() => {
     const root = depositRoot() || scope();
     return allVisible('input', root).filter(el => {
       if (exclude.includes(el)) return false;
+      // Отсоединённый от страницы узел писать бесполезно: значение в нём
+      // меняется, а на экране остаётся старое. Именно так расширение
+      // отчиталось о 250, когда в поле стояло 100.
+      if (!document.contains(el)) return false;
+      if (el.disabled || el.readOnly) return false;
       const t = (el.getAttribute('inputmode') || el.type || '').toLowerCase();
       return ['decimal', 'numeric', 'number', 'text', 'tel', ''].includes(t);
     });

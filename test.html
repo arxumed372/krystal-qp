@@ -117,6 +117,22 @@ els.amtUsdg.addEventListener('input', () => {
     setTimeout(() => { state.amtUsdg='430.74'; els.amtUsdg.value='430.74'; }, 400);
   }
 });
+// Перерисовка поля суммы: сайт заменяет узел новым при смене границ.
+// Старая ссылка остаётся жить вне документа — писать в неё бесполезно.
+window.REMOUNT = false;
+function remountAmount() {
+  const old = els.amtUsdg;
+  const fresh = old.cloneNode(true);
+  fresh.value = state.amtUsdg;
+  old.replaceWith(fresh);
+  els.amtUsdg = fresh;
+  fresh.addEventListener('input', () => { state.amtUsdg = fresh.value; relayout(); });
+}
+for (const k of ['lo','hi']) {
+  els[k].addEventListener('input', () => {
+    if (window.REMOUNT) setTimeout(remountAmount, 120);
+  });
+}
 window.keepSecond = (on) => { window.KEEP = !!on; relayout(); };
 window.readState = () => ({ ...state, второеПолеВидно: jinBox.style.display !== 'none' });
 window.resetAll = () => {

@@ -1,72 +1,99 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>Двойник формы Krystal для проверки Krystal QP</title>
+<title>Двойник окна Add Liquidity для проверки Krystal QP</title>
 <!--
-  Страница-двойник. Настоящий сайт закрыт Cloudflare для автоматических
-  браузеров, поэтому проверяю механику на форме с такими же свойствами:
-  поля управляются приложением (как в React), приложение пересчитывает
-  границы после ввода, и умеет вести себя враждебно — переписывать нижнюю
-  границу после верхней. Именно эту враждебность и надо поймать.
+  Двойник собран по снимкам экрана владельца от 02.09.2026. Воспроизводит то,
+  что на них видно и что важно для сценария:
+
+    - подписи «Min Price» и «Max Price» у полей границ;
+    - строка «Current Price 0.009975 USDG per JINQIAN»;
+    - вкладки «Zap In» и «Manual»;
+    - в «Deposit Amounts» ДВА поля, и поле второго токена ИСЧЕЗАЕТ, когда
+      верхняя граница уходит ниже текущей цены. Ради этого исчезновения всё
+      и делается: тогда позиция входит одним USDG.
 -->
-<body style="font:14px system-ui;padding:20px;background:#f8fafc">
-<h3>Пул TOKEN / USDC</h3>
-<div><label>Amount</label><br><input id="amt" inputmode="decimal" placeholder="0.0"></div>
-<div><label>Min Price</label><br><input id="lo" inputmode="decimal"></div>
-<div><label>Max Price</label><br><input id="hi" inputmode="decimal"></div>
-<p>Текущая цена: <b id="px">2.5</b></p>
+<body style="font:14px system-ui;background:#0b1220;color:#e2e8f0;padding:18px">
+
+<h3>Add liquidity — JINQIAN/USDG</h3>
+
+<div style="display:flex;gap:30px;flex-wrap:wrap">
+  <div style="min-width:330px">
+    <div>Price Range</div>
+    <div style="margin:10px 0">
+      <button id="narrow">Narrow Range</button>
+      <button id="wide">Wide Range</button>
+      <button id="full">Full Range</button>
+    </div>
+    <div id="cur">Current Price 0.009975 USDG per JINQIAN</div>
+
+    <div style="margin-top:12px">
+      <div>Min Price</div>
+      <input id="lo" inputmode="decimal">
+      <div>JINQIAN per USDG</div>
+    </div>
+    <div style="margin-top:12px">
+      <div>Max Price</div>
+      <input id="hi" inputmode="decimal">
+      <div>JINQIAN per USDG</div>
+    </div>
+  </div>
+
+  <div style="min-width:330px">
+    <div>
+      <button id="zap">⚡ Zap In</button>
+      <button id="manual" aria-selected="true">👆 Manual</button>
+    </div>
+    <div style="margin-top:10px">Deposit Amounts</div>
+    <div id="usdgBox" style="margin-top:8px">
+      <input id="amtUsdg" inputmode="decimal"> USDG
+    </div>
+    <div id="jinBox" style="margin-top:8px">
+      <input id="amtJin" inputmode="decimal"> JINQIAN
+    </div>
+    <button id="add" style="margin-top:12px">Add Liquidity</button>
+  </div>
+</div>
 
 <script>
-// Имитация управляемых полей: значение живёт в состоянии, поле лишь его
-// отражает. Прямое присваивание value состояние НЕ меняет — ровно как в React.
-const state = { amt: '', lo: '2.25', hi: '2.75' };
-const els = { amt: amt, lo: lo, hi: hi };
-// Режим враждебности: приложение переписывает нижнюю границу после ввода.
-window.HOSTILE = false;
+// Управляемые поля: значение живёт в состоянии, как в React.
+const PRICE = 0.009975;
+const state = { lo: '0.007836563167142053', hi: '0.014364646284887317',
+                amtUsdg: '', amtJin: '' };
+const els = { lo: lo, hi: hi, amtUsdg: amtUsdg, amtJin: amtJin };
+
+// Поле второго токена нужно, только пока верхняя граница ВЫШЕ цены.
+function relayout() {
+  const hiV = parseFloat(state.hi);
+  const twoSided = !(hiV > 0) || hiV > PRICE;
+  jinBox.style.display = twoSided ? '' : 'none';
+  if (!twoSided) { state.amtJin = ''; els.amtJin.value = ''; }
+}
 
 for (const [k, el] of Object.entries(els)) {
   el.value = state[k];
-  el.addEventListener('input', () => {
-    state[k] = el.value;
-    if (window.HOSTILE && k === 'lo') {
-      setTimeout(() => { state.lo = '1.00'; el.value = '1.00'; }, 50);
-    }
-  });
+  el.addEventListener('input', () => { state[k] = el.value; relayout(); });
 }
-window.readState = () => ({ ...state });
+relayout();
+
+wide.onclick = () => {
+  state.lo = '0.007836563167142053'; state.hi = '0.014364646284887317';
+  els.lo.value = state.lo; els.hi.value = state.hi; relayout();
+};
+manual.onclick = () => { manual.setAttribute('aria-selected','true');
+                         zap.setAttribute('aria-selected','false'); };
+zap.onclick = () => { zap.setAttribute('aria-selected','true');
+                      manual.setAttribute('aria-selected','false'); };
+
+window.readState = () => ({ ...state, второеПолеВидно: jinBox.style.display !== 'none' });
+window.resetAll = () => {
+  state.lo='0.007836563167142053'; state.hi='0.014364646284887317';
+  state.amtUsdg=''; state.amtJin='';
+  for (const [k,el] of Object.entries(els)) el.value = state[k];
+  relayout();
+};
 </script>
 
 <script src="/src/settings.js"></script>
 <script src="/src/dom.js"></script>
 <script src="/src/teach.js"></script>
 <script src="/src/actions.js"></script>
-
-<script>
-// Драйвер проверки: подставляем «выученные» поля так же, как это сделало бы
-// обучение мышью, и прогоняем сценарий.
-window.runTest = async (widthPct, hostile, shape, usePriceLabel) => {
-  window.HOSTILE = !!hostile;
-  state.lo = '2.25'; state.hi = '2.75'; state.amt = '';
-  els.lo.value = '2.25'; els.hi.value = '2.75'; els.amt.value = '';
-  const D = window.KQPDom;
-  const cfg = {
-    settleMs: 200,
-    fields: {
-      amount: D.describe(els.amt),
-      minPrice: D.describe(els.lo),
-      maxPrice: D.describe(els.hi),
-      ...(usePriceLabel ? { price: D.describe(document.getElementById('px')) } : {}),
-    },
-  };
-  try {
-    const r = await window.KQPActions.fill({ amount: 100, widthPct, shape: shape || 'both' }, cfg, () => {});
-    return { ok: true, ...r, state: window.readState() };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
-};
-window.describeTest = () => {
-  const D = window.KQPDom;
-  const d = D.describe(els.lo);
-  return { описание: d, нашёлся: D.find(d) === els.lo };
-};
-</script>

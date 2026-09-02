@@ -14,6 +14,9 @@ window.KQPDom = (() => {
     return r.width > 0 && r.height > 0;
   };
 
+  const allVisible = (sel, root = document) =>
+    [...root.querySelectorAll(sel)].filter(visible);
+
   const textOf = (el) => (el.innerText || el.textContent || '').trim();
 
   // ── Устойчивый путь к элементу ──────────────────────────────────────────
@@ -133,6 +136,69 @@ window.KQPDom = (() => {
     return out;
   }
 
+  // ── Автоопределение полей Krystal ───────────────────────────────────────
+  //
+  // Разметку я увидел по скринам владельца, поэтому поля теперь ищутся сами,
+  // а показ мышью остаётся запасным путём. Ищем по ВИДИМОЙ ПОДПИСИ, а не по
+  // классам: подпись «Min Price» — часть интерфейса, класс — деталь сборки.
+  function inputNear(labelRe) {
+    const hits = allVisible('input').filter(el => {
+      const l = nearbyLabel(el) || '';
+      return labelRe.test(l);
+    });
+    return hits.length === 1 ? hits[0] : null;
+  }
+
+  // Надпись с текущей ценой: «Current Price 0.009975 USDG per JINQIAN».
+  function priceNode() {
+    const nodes = allVisible('*').filter(el => {
+      if (el.children.length > 3) return false;
+      return /current\s+price/i.test(textOf(el));
+    });
+    // Берём САМЫЙ ГЛУБОКИЙ подходящий — у внешних предков текст тот же,
+    // но в нём намешано лишнее, и число вытащится не то.
+    let best = null;
+    for (const el of nodes) {
+      if (!best || best.contains(el)) best = el;
+    }
+    return best;
+  }
+
+  // Поле суммы. В ручном режиме с односторонним диапазоном оно ОДНО.
+  // Если их два — значит диапазон двусторонний и мы не можем доказать,
+  // в какое класть. Тогда возвращаем null: отказ честнее догадки.
+  function amountInput(exclude) {
+    const rest = allVisible('input').filter(el => !exclude.includes(el));
+    const numeric = rest.filter(el => {
+      const t = (el.getAttribute('inputmode') || el.type || '').toLowerCase();
+      return t === 'decimal' || t === 'numeric' || t === 'number' || t === 'text';
+    });
+    return numeric.length === 1 ? numeric[0] : null;
+  }
+
+  // Вкладка Manual против Zap In. Владелец работает в Manual.
+  function manualTab() {
+    return allVisible('button, [role="tab"]')
+      .find(el => /^\s*(?:👆|✋)?\s*manual\s*$/i.test(textOf(el))) || null;
+  }
+
+  // Поле суммы НЕ обязательно на старте. Пока диапазон двусторонний, полей
+  // два, и это нормальное начальное состояние окна — отказываться на нём
+  // нельзя. Сумму ищем позже, когда верхняя граница уже ушла под цену и
+  // второе поле исчезло.
+  function autoFields() {
+    const lo = inputNear(/min\s*price/i);
+    const hi = inputNear(/max\s*price/i);
+    if (!lo || !hi) return null;
+    const px = priceNode();
+    const amt = amountInput([lo, hi]);
+    return {
+      minPrice: describe(lo), maxPrice: describe(hi),
+      amount: amt ? describe(amt) : null,
+      price: px ? describe(px) : null,
+    };
+  }
+
   return { visible, textOf, describe, find, setReactValue, pressEnter, num,
-           snapshot, nearbyLabel };
+           snapshot, nearbyLabel, autoFields, manualTab, priceNode, amountInput };
 })();

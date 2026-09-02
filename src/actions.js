@@ -1,19 +1,22 @@
-// Сценарий входа в позицию.
+// Сценарий входа в позицию на Krystal.
 //
-// ПОРЯДОК. На Meteora я измерил, что сумма должна идти ДО границ: приложение
-// пересаживает диапазон, пока сумма пустая, и обратный порядок давал не тот
-// диапазон, который просили. Здесь тот же порядок принят по умолчанию, но
-// НЕ измерен на Krystal — я не смог открыть их сайт автоматическим браузером.
-// Поэтому после заполнения сценарий ПЕРЕЧИТЫВАЕТ все три поля и показывает,
-// что реально стоит. Если приложение переписало границы, это будет видно
-// сразу, а не после подписи транзакции.
+// ПОРЯДОК ВВОДА ОБРАТНЫЙ ТОМУ, ЧТО НА METEORA. Там сумма идёт до границ.
+// Здесь наоборот: сначала границы, потом сумма. Это видно на снимках экрана
+// владельца — пока диапазон двусторонний, в «Deposit Amounts» ДВА поля, и
+// второе исчезает только когда верхняя граница уходит ниже текущей цены.
+// Если писать сумму первой, поле под ней меняется, и написанное пропадает.
+//
+// ФОРМА «ВНИЗ». Владелец открывает позицию без верхней пустой части: обе
+// границы ниже рынка, тогда нужен только котируемый токен (у него USDG),
+// а поле второго токена исчезает совсем. На его снимке при цене 0.009975
+// стоят 0.005025 и 0.00959 — то есть верх на 3.9% НИЖЕ цены, а не вровень.
+// Поэтому верхняя граница ставится с отступом, а не ровно в цену: ровно
+// в цену оставляет полоску, где второй токен всё ещё нужен.
 window.KQPActions = (() => {
   const D = window.KQPDom;
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-  // Ждём, пока приложение перестанет пересчитывать: два одинаковых снимка
-  // подряд. Возврат по таймауту не ошибка — идём дальше с тем, что есть.
   async function settle(fields, { quiet = 400, timeout = 5000 } = {}) {
     const t0 = Date.now();
     let prev = JSON.stringify(D.snapshot(fields));
@@ -27,21 +30,20 @@ window.KQPActions = (() => {
     return false;
   }
 
-  // Текущая цена берётся из САМИХ полей границ: их середина. Это честнее,
-  // чем выдёргивать число из текста страницы, которого я не видел.
-  // Если границы пустые — цену взять неоткуда, и мы говорим об этом прямо,
-  // а не подставляем выдуманное число.
+  // Текущая цена. Надпись «Current Price 0.009975 USDG per JINQIAN» —
+  // единственный источник, который остаётся верным ПОСЛЕ заполнения.
+  // Середина границ годится только до первого нажатия: измерено, что второе
+  // нажатие подряд уводит цену с 2.5 на 2.4375, и диапазон ползёт вниз.
   function currentPrice(fields) {
-    // 1) Надпись с ценой, если её показали. Единственный источник, который
-    //    остаётся верным ПОСЛЕ заполнения.
-    if (fields.price) {
-      const el = D.find(fields.price);
-      const v = el && D.num(D.textOf(el));
-      if (v != null && v > 0) return { price: v, src: 'надпись' };
-    }
-    // 2) Середина границ. Верна только пока границы стоят вокруг рынка,
-    //    то есть ДО первого заполнения. Помечаем источник, чтобы вызывающий
-    //    мог предупредить, а не делать вид, что знает точно.
+    const fromNode = (el) => {
+      if (!el) return null;
+      const v = D.num(D.textOf(el).replace(/current\s+price/i, ''));
+      return (v != null && v > 0) ? v : null;
+    };
+    const shown = fromNode(fields.price ? D.find(fields.price) : null)
+               ?? fromNode(D.priceNode());
+    if (shown != null) return { price: shown, src: 'надпись' };
+
     const lo = D.num((D.find(fields.minPrice) || {}).value);
     const hi = D.num((D.find(fields.maxPrice) || {}).value);
     if (lo != null && hi != null && lo > 0 && hi > 0)
@@ -51,67 +53,108 @@ window.KQPActions = (() => {
 
   function round(x) {
     if (!isFinite(x) || x <= 0) return x;
-    // Сохраняем 6 значащих цифр: у токенов с ценой 0.00000123 округление
-    // до двух знаков превратило бы диапазон в ноль.
+    // Сохраняем значащие цифры: у пары с ценой 0.009975 округление до двух
+    // знаков превратило бы весь диапазон в ноль.
     const mag = Math.floor(Math.log10(Math.abs(x)));
-    const dec = Math.max(0, Math.min(12, 5 - mag));
+    const dec = Math.max(0, Math.min(18, 6 - mag));
     return Number(x.toFixed(dec));
   }
 
-  // Основной сценарий. Возвращает отчёт о том, ЧТО РЕАЛЬНО СТОИТ в полях,
-  // а не о том, что мы туда отправили.
-  async function fill({ amount, widthPct, shape = 'both' }, cfg, report) {
-    const fields = cfg.fields;
-    if (!fields || !fields.amount || !fields.minPrice || !fields.maxPrice) {
-      throw new Error('поля не выучены — нажми «Указать поля» и покажи их мышью');
+  function bounds(price, { shape, widthPct, gapPct }) {
+    if (shape === 'down') {
+      return { lo: round(price * (1 - widthPct / 100)),
+               hi: round(price * (1 - gapPct / 100)) };
     }
-    for (const [k, d] of Object.entries(fields)) {
-      if (!D.find(d)) {
-        throw new Error(`не нахожу ${k} на странице — возможно, сайт изменился, ` +
-                        'переобучи поля');
+    if (shape === 'up') {
+      return { lo: round(price * (1 + gapPct / 100)),
+               hi: round(price * (1 + widthPct / 100)) };
+    }
+    return { lo: round(price * (1 - widthPct / 100)),
+             hi: round(price * (1 + widthPct / 100)) };
+  }
+
+  // Ручной режим. В режиме Zap In поля другие, и заполнять их этим сценарием
+  // нельзя. Переключаем сами, если кнопка нашлась.
+  function ensureManual() {
+    const tab = D.manualTab();
+    if (!tab) return false;
+    const active = /true/i.test(tab.getAttribute('aria-selected') || '') ||
+                   tab.dataset.state === 'active';
+    if (!active) tab.click();
+    return true;
+  }
+
+  async function fill({ amount, widthPct, shape = 'down', gapPct = 3 },
+                      cfg, report) {
+    // Сначала пробуем узнать поля сами — разметка известна по снимкам.
+    // Выученные показом мыши имеют приоритет: их владелец видел своими глазами.
+    let fields = cfg.fields;
+    if (!fields || !fields.minPrice || !fields.maxPrice) {
+      fields = D.autoFields();
+      if (!fields) {
+        throw new Error('не нахожу поля сам. Открой «Add Liquidity» → вкладка ' +
+                        'Manual, либо нажми «Указать поля» и покажи их мышью');
+      }
+      report('поля определил сам');
+    }
+    for (const k of ['minPrice', 'maxPrice']) {
+      if (!D.find(fields[k])) {
+        throw new Error(`не нахожу ${k} на странице — открой окно Add Liquidity ` +
+                        'или переобучи поля');
       }
     }
 
+    ensureManual();
+
     const src = currentPrice(fields);
-    const price = src && src.price;
-    if (src == null) {
-      throw new Error('границы пустые — цену взять неоткуда. Открой пул так, ' +
-                      'чтобы Min/Max были заполнены, и повтори');
+    if (!src) {
+      throw new Error('не вижу текущую цену. Открой окно так, чтобы была видна ' +
+                      'строка Current Price, и повтори');
     }
-
-    // Форма диапазона. При 'down' верхняя граница ставится РОВНО в текущую
-    // цену: позиция целиком ниже рынка, входит одной котируемой монетой,
-    // и верхней незаполненной части не остаётся. При 'up' — зеркально.
-    let lo, hi;
-    if (shape === 'down') {
-      lo = round(price * (1 - widthPct / 100));
-      hi = round(price);
-    } else if (shape === 'up') {
-      lo = round(price);
-      hi = round(price * (1 + widthPct / 100));
-    } else {
-      lo = round(price * (1 - widthPct / 100));
-      hi = round(price * (1 + widthPct / 100));
+    const price = src.price;
+    if (shape !== 'both' && gapPct >= widthPct) {
+      throw new Error(`отступ ${gapPct}% не меньше ширины ${widthPct}% — ` +
+                      'диапазон вышел бы пустым');
     }
+    const { lo, hi } = bounds(price, { shape, widthPct, gapPct });
 
-    report(`сумма ${amount}…`);
-    D.setReactValue(D.find(fields.amount), amount);
-    D.pressEnter(D.find(fields.amount));
-    await settle(fields, { timeout: cfg.settleMs * 6 });
-
-    report(`верхняя граница ${hi}…`);
+    // ГРАНИЦЫ ПЕРВЫМИ, верхняя раньше нижней: пока верхняя выше цены,
+    // приложение держит два поля суммы, и опираться на них нельзя.
+    report(`верх ${hi}…`);
     D.setReactValue(D.find(fields.maxPrice), hi);
     D.pressEnter(D.find(fields.maxPrice));
     await settle(fields, { timeout: cfg.settleMs * 6 });
 
-    report(`нижняя граница ${lo}…`);
+    report(`низ ${lo}…`);
     D.setReactValue(D.find(fields.minPrice), lo);
     D.pressEnter(D.find(fields.minPrice));
     await settle(fields, { timeout: cfg.settleMs * 6 });
 
-    // Перечитываем. Всё, что расходится с задуманным, показываем явно.
+    // Поле суммы ищем ЗАНОВО: после сужения диапазона второе поле исчезает,
+    // и найденное вначале может быть уже не тем полем.
+    const amtDesc = (cfg.fields && cfg.fields.amount)
+      ? cfg.fields.amount
+      : ((D.autoFields() || {}).amount || fields.amount);
+    const amtEl = amtDesc ? D.find(amtDesc) : null;
+    if (!amtEl) {
+      // Полей суммы осталось два. Для формы «вниз» это значит, что верх не
+      // ушёл под цену. Для двусторонней это нормально по устройству, но тогда
+      // выбрать поле за владельца я не могу — какой из двух токенов вносить,
+      // знает только он.
+      throw new Error(shape === 'both'
+        ? 'границы поставил. Сумму не вписал: при двустороннем диапазоне ' +
+          'полей два, и какой токен вносить — решаешь ты. Покажи нужное ' +
+          'поле через «Указать поля»'
+        : 'границы поставил, но поле суммы одно не осталось — позиция всё ' +
+          'ещё двусторонняя. Увеличь отступ');
+    }
+    report(`сумма ${amount}…`);
+    D.setReactValue(amtEl, amount);
+    D.pressEnter(amtEl);
+    await settle(fields, { timeout: cfg.settleMs * 6 });
+
     const got = {
-      amount: D.num((D.find(fields.amount) || {}).value),
+      amount: D.num(((amtDesc && D.find(amtDesc)) || amtEl).value),
       lo: D.num((D.find(fields.minPrice) || {}).value),
       hi: D.num((D.find(fields.maxPrice) || {}).value),
     };
@@ -119,11 +162,15 @@ window.KQPActions = (() => {
       ? null : Math.abs(a - b) / Math.abs(b) * 100;
 
     return {
-      asked: { amount, lo, hi, price, widthPct, shape, priceSrc: src.src },
+      asked: { amount, lo, hi, price, widthPct, gapPct, shape, priceSrc: src.src },
       got,
-      drift: { amount: off(got.amount, amount), lo: off(got.lo, lo), hi: off(got.hi, hi) },
+      drift: { amount: off(got.amount, amount), lo: off(got.lo, lo),
+               hi: off(got.hi, hi) },
+      // Главная проверка формы «вниз»: верхняя граница обязана оказаться
+      // НИЖЕ цены, иначе второй токен всё ещё нужен и смысл теряется.
+      oneSided: got.hi != null && got.hi < price,
     };
   }
 
-  return { fill, currentPrice, round };
+  return { fill, currentPrice, round, bounds, ensureManual };
 })();

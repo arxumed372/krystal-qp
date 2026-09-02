@@ -8,7 +8,7 @@ window.KQPPanel = (() => {
   const A = window.KQPActions;
 
   let root = null, cfg = null, statusEl = null;
-  let amount = null, width = null, shape = null;
+  let amount = null, width = null, shape = null, gap = null;
 
   const css = `
   .kqp { position:fixed; right:16px; bottom:16px; z-index:2147483646;
@@ -57,7 +57,8 @@ window.KQPPanel = (() => {
   async function go() {
     try {
       status('заполняю…');
-      const r = await A.fill({ amount, widthPct: width, shape }, cfg, m => status(m));
+      const r = await A.fill({ amount, widthPct: width, shape, gapPct: gap },
+                             cfg, m => status(m));
       const d = r.drift;
       const bad = ['amount', 'lo', 'hi'].filter(k => d[k] == null || d[k] > 1);
       const line = `сумма ${r.got.amount ?? '—'}\n` +
@@ -68,6 +69,11 @@ window.KQPPanel = (() => {
         // Расхождение не прячем. Приложение могло переписать границы —
         // владелец должен увидеть это ДО подписи, а не после.
         status(line + `\nВНИМАНИЕ: сайт изменил ${bad.join(', ')} — проверь перед подписью`, 'err');
+      } else if (shape === 'down' && !r.oneSided) {
+        // Ради этого всё и делается: верх обязан оказаться НИЖЕ цены,
+        // иначе позиция снова двусторонняя и нужен второй токен.
+        status(line + '\nверх не ушёл ниже цены — позиция осталась ' +
+               'двусторонней. Увеличь отступ', 'err');
       } else if (r.asked.priceSrc === 'середина границ') {
         // Середина границ равна рыночной цене только ДО первого заполнения.
         // После него границы уже сдвинуты, и повторное нажатие увело бы
@@ -79,7 +85,8 @@ window.KQPPanel = (() => {
       } else {
         status(line + '\nготово — проверь и подписывай сам', 'ok');
       }
-      await S.save({ lastAmount: amount, lastWidth: width, lastShape: shape });
+      await S.save({ lastAmount: amount, lastWidth: width, lastShape: shape,
+                     lastGap: gap });
     } catch (e) {
       status(e.message, 'err');
     }
@@ -119,6 +126,7 @@ window.KQPPanel = (() => {
     amount = cfg.lastAmount;
     width = cfg.lastWidth;
     shape = cfg.lastShape;
+    gap = cfg.lastGap;
 
     const style = document.createElement('style');
     style.textContent = css;
@@ -132,6 +140,7 @@ window.KQPPanel = (() => {
         <div><div class="lbl">сумма</div><div class="row" id="kqp-a"></div></div>
         <div><div class="lbl">форма</div><div class="row" id="kqp-s"></div></div>
         <div><div class="lbl">ширина %</div><div class="row" id="kqp-w"></div></div>
+        <div><div class="lbl">отступ от цены %</div><div class="row" id="kqp-g"></div></div>
         <button class="go">Заполнить</button>
         <button class="teach">Указать поля</button>
         <div class="st"></div>
@@ -141,6 +150,7 @@ window.KQPPanel = (() => {
     statusEl = root.querySelector('.st');
     chips(root.querySelector('#kqp-a'), cfg.amounts, '', () => amount, v => amount = v);
     chips(root.querySelector('#kqp-w'), cfg.widths, '%', () => width, v => width = v);
+    chips(root.querySelector('#kqp-g'), cfg.gaps, '%', () => gap, v => gap = v);
     const SHAPES = [['down', 'вниз'], ['both', '± обе'], ['up', 'вверх']];
     const sh = root.querySelector('#kqp-s');
     const drawShapes = () => {
@@ -159,8 +169,11 @@ window.KQPPanel = (() => {
     root.querySelector('.x').onclick = () => root.remove();
     drag(root.querySelector('header'), root);
 
-    status(cfg.fields ? 'поля выучены — можно заполнять'
-                      : 'сначала нажми «Указать поля»');
+    // Поля определяются сами по подписям Min Price / Max Price. Показ мышью
+    // остался запасным путём на случай, если Krystal переделает разметку.
+    status(cfg.fields
+      ? 'поля выучены мышью — можно заполнять'
+      : 'открой «Add Liquidity» → Manual и жми «Заполнить», поля найду сам');
   }
 
   return { mount };

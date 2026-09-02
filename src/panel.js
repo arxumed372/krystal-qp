@@ -156,7 +156,12 @@ window.KQPPanel = (() => {
         `низ: ${val(f.minPrice) ?? 'НЕ ВИЖУ'}\n` +
         `верх: ${val(f.maxPrice) ?? 'НЕ ВИЖУ'}\n` +
         `цена: ${src ? A.round(src.price) + ' (' + src.src + ')' : 'НЕ ВИЖУ'}\n` +
-        `поле суммы: ${amtEl ? 'нашёл' : 'пока не одно — станет одним после сужения'}\n` +
+        `поле суммы: ${amtEl ? 'нашёл' : 'НЕ опознал'}\n` +
+        `полей в Deposit Amounts: ${D.amountInputs([]).length}` +
+        `${D.depositRoot() ? '' : ' (саму область не нашёл)'}\n` +
+        `окно: ${D.dialogRoot() ? 'нашёл' : 'НЕ нашёл'}\n` +
+        `единицы: ${(() => { const u = D.priceUnits();
+           return u ? u.unit + ' за ' + u.per : 'не разобрал'; })()}\n` +
         `источник полей: ${(cfg.fields && cfg.fields.minPrice) ? 'обучение мышью' : 'сам'}`,
         src ? 'ok' : 'err');
     } catch (e) {

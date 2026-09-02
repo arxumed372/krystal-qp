@@ -81,7 +81,7 @@ const els = { lo: lo, hi: hi, amtUsdg: amtUsdg, amtJin: amtJin };
 function relayout() {
   const hiV = parseFloat(state.hi);
   const twoSided = !(hiV > 0) || hiV > PRICE;
-  jinBox.style.display = twoSided ? '' : 'none';
+  jinBox.style.display = (twoSided || window.KEEP) ? '' : 'none';
   if (!twoSided) { state.amtJin = ''; els.amtJin.value = ''; }
 }
 
@@ -107,6 +107,9 @@ window.clicked = null;
 document.getElementById('add').addEventListener('click', () => {
   window.clicked = document.getElementById('add').textContent;
 });
+// Режим «второе поле остаётся видимым» — так вело себя окно у владельца:
+// поле STRATTON исчезло с экрана, но расширение всё равно считало поля.
+window.keepSecond = (on) => { window.KEEP = !!on; relayout(); };
 window.readState = () => ({ ...state, второеПолеВидно: jinBox.style.display !== 'none' });
 window.resetAll = () => {
   state.lo='0.007836563167142053'; state.hi='0.014364646284887317';

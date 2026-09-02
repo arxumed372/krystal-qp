@@ -224,13 +224,46 @@ window.KQPDom = (() => {
   // Поле суммы. В ручном режиме с односторонним диапазоном оно ОДНО.
   // Если их два — значит диапазон двусторонний и мы не можем доказать,
   // в какое класть. Тогда возвращаем null: отказ честнее догадки.
-  function amountInput(exclude) {
-    const rest = allVisible('input', scope()).filter(el => !exclude.includes(el));
-    const numeric = rest.filter(el => {
-      const t = (el.getAttribute('inputmode') || el.type || '').toLowerCase();
-      return t === 'decimal' || t === 'numeric' || t === 'number' || t === 'text';
+  // Область «Deposit Amounts» — там и только там лежат поля сумм.
+  function depositRoot() {
+    const marks = allVisible('*', scope()).filter(el => {
+      if (el.children.length > 4) return false;
+      return /^\s*deposit\s+amounts\s*$/i.test(textOf(el));
     });
-    return numeric.length === 1 ? numeric[0] : null;
+    if (!marks.length) return null;
+    // Поднимаемся до предка, где рядом с заголовком появились поля ввода.
+    let n = marks[0];
+    for (let i = 0; i < 5 && n; i++, n = n.parentElement) {
+      if (n.querySelector('input')) return n;
+    }
+    return null;
+  }
+
+  // Поле суммы. Раньше требовалось, чтобы поле осталось ровно одно, и это
+  // подвело: у владельца на экране поле было одно, а расширение отказывалось.
+  // Считать «сколько всего полей» — плохой признак. Правильный: поле лежит
+  // в области Deposit Amounts, и рядом с ним написано имя стейбла.
+  function amountInputs(exclude) {
+    const root = depositRoot() || scope();
+    return allVisible('input', root).filter(el => {
+      if (exclude.includes(el)) return false;
+      const t = (el.getAttribute('inputmode') || el.type || '').toLowerCase();
+      return ['decimal', 'numeric', 'number', 'text', 'tel', ''].includes(t);
+    });
+  }
+
+  function amountInput(exclude) {
+    const list = amountInputs(exclude);
+    if (!list.length) return null;
+    if (list.length === 1) return list[0];
+    // Полей несколько — берём то, рядом с которым стоит стейбл: владелец
+    // всегда заходит долларом. Так выбор доказуем, а не «первое попавшееся».
+    const stable = list.find(el => {
+      const box = el.closest('div');
+      const t = box ? textOf(box.parentElement || box) : '';
+      return /\b(usdg|usdc|usdt|dai|usde)\b/i.test(t);
+    });
+    return stable || null;
   }
 
   // Вкладка Manual против Zap In. Владелец работает в Manual.
@@ -321,5 +354,5 @@ window.KQPDom = (() => {
   return { visible, textOf, describe, find, setReactValue, pressEnter, num,
            snapshot, nearbyLabel, autoFields, manualTab, priceNode, amountInput,
            submitButton, dialogRoot, scope, priceUnits, priceIsStable,
-           switchPriceUnits };
+           switchPriceUnits, depositRoot, amountInputs };
 })();

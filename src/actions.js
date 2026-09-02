@@ -160,17 +160,32 @@ window.KQPActions = (() => {
     }
     const { lo, hi } = bounds(price, { shape, widthPct, gapPct });
 
-    // ГРАНИЦЫ ПЕРВЫМИ, верхняя раньше нижней: пока верхняя выше цены,
-    // приложение держит два поля суммы, и опираться на них нельзя.
-    report(`верх ${hi}…`);
-    D.setReactValue(D.find(fields.maxPrice), hi);
-    D.pressEnter(D.find(fields.maxPrice));
-    await settle(fields, { timeout: cfg.settleMs * 6 });
-
-    report(`низ ${lo}…`);
-    D.setReactValue(D.find(fields.minPrice), lo);
-    D.pressEnter(D.find(fields.minPrice));
-    await settle(fields, { timeout: cfg.settleMs * 6 });
+    // ГРАНИЦЫ ПЕРВЫМИ. Но порядок между ними не жёсткий, а зависит от того,
+    // куда переезжает диапазон.
+    //
+    // Если написать верх раньше низа, а новый верх окажется НИЖЕ старого низа,
+    // то на мгновение получится перевёрнутый диапазон: низ больше верха.
+    // Библиотека Uniswap, на которой работает Krystal, такого не допускает и
+    // выбрасывает «Invariant failed» — ту самую красную надпись. То же самое
+    // зеркально при переезде вверх.
+    //
+    // Поэтому сначала двигаем ту границу, которая уводит диапазон в нужную
+    // сторону, и перевёрнутого состояния не возникает ни на миг.
+    const curLo = D.num((D.find(fields.minPrice) || {}).value);
+    const curHi = D.num((D.find(fields.maxPrice) || {}).value);
+    const minFirst = (curLo != null && hi < curLo);   // переезжаем вниз
+    const steps = minFirst
+      ? [['низ', fields.minPrice, lo], ['верх', fields.maxPrice, hi]]
+      : [['верх', fields.maxPrice, hi], ['низ', fields.minPrice, lo]];
+    if (minFirst) report('диапазон уезжает вниз — сначала нижняя граница');
+    for (const [name, desc, value] of steps) {
+      report(`${name} ${value}…`);
+      const el = D.find(desc);
+      if (!el) throw new Error(`поле «${name}» пропало со страницы`);
+      D.setReactValue(el, value);
+      D.pressEnter(el);
+      await settle(fields, { timeout: cfg.settleMs * 6 });
+    }
 
     // Поле суммы ищем ЗАНОВО: после сужения диапазона второе поле исчезает,
     // и найденное вначале может быть уже не тем полем.

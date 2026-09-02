@@ -119,6 +119,13 @@ els.amtUsdg.addEventListener('input', () => {
 });
 // Перерисовка поля суммы: сайт заменяет узел новым при смене границ.
 // Старая ссылка остаётся жить вне документа — писать в неё бесполезно.
+// Как настоящая библиотека Uniswap: перевёрнутый диапазон — ошибка.
+window.invariant = null;
+function checkInvariant() {
+  const a=parseFloat(state.lo), b=parseFloat(state.hi);
+  if (isFinite(a) && isFinite(b) && a >= b) window.invariant = 'Invariant failed';
+}
+for (const k of ['lo','hi']) els[k].addEventListener('input', checkInvariant);
 window.REMOUNT = false;
 function remountAmount() {
   const old = els.amtUsdg;

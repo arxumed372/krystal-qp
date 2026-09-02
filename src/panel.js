@@ -39,6 +39,10 @@ window.KQPPanel = (() => {
   .kqp .st.err { color:#fca5a5; }
   .kqp .st.ok { color:#86efac; }
   .kqp .x { cursor:pointer; color:#64748b; }
+  .kqp .own { width:56px; background:#0b1220; color:#e2e8f0; font:inherit;
+              border:1px solid #334155; border-radius:7px; padding:5px 7px; }
+  .kqp .own.on { border-color:#16a34a; color:#86efac; }
+  .kqp .own.bad { border-color:#ef4444; color:#fca5a5; }
   .kqp .ver { color:#64748b; font-weight:400; font-size:11px; }
   `;
 
@@ -48,6 +52,9 @@ window.KQPPanel = (() => {
     statusEl.textContent = text;
   }
 
+  // Ряд кнопок с быстрыми значениями плюс поле для своего.
+  // Заготовки покрывают обычный случай, но привязывать владельца только к ним
+  // нельзя: у него пул с крупным шагом, и там нужны свои числа.
   function chips(host, values, suffix, get, set) {
     host.innerHTML = '';
     for (const v of values) {
@@ -57,6 +64,29 @@ window.KQPPanel = (() => {
       b.onclick = () => { set(v); chips(host, values, suffix, get, set); };
       host.appendChild(b);
     }
+    const own = document.createElement('input');
+    own.className = 'own';
+    own.placeholder = 'своё';
+    own.inputMode = 'decimal';
+    // Если текущее значение не из заготовок — показываем его здесь,
+    // иначе непонятно, что выбрано.
+    if (!values.includes(get())) {
+      own.value = String(get());
+      own.classList.add('on');
+    }
+    const apply = () => {
+      const v = parseFloat(String(own.value).replace(',', '.'));
+      if (!isFinite(v) || v <= 0) {
+        own.classList.add('bad');
+        return;                       // мусор не принимаем молча
+      }
+      own.classList.remove('bad');
+      set(v);
+      chips(host, values, suffix, get, set);
+    };
+    own.onchange = apply;
+    own.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } };
+    host.appendChild(own);
   }
 
   async function go(alsoSubmit) {

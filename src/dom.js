@@ -14,8 +14,14 @@ window.KQPDom = (() => {
     return r.width > 0 && r.height > 0;
   };
 
+  // Собственные элементы панели в счёт НЕ идут. Как только я добавил в неё
+  // поля для своих значений, поиск стал видеть их как поля суммы: их стало
+  // четыре вместо одного, и сценарий отказался работать. Панель обязана быть
+  // невидимой для собственного поиска.
+  const ours = (el) => !!(el.closest && el.closest('.kqp'));
+
   const allVisible = (sel, root = document) =>
-    [...root.querySelectorAll(sel)].filter(visible);
+    [...root.querySelectorAll(sel)].filter(el => visible(el) && !ours(el));
 
   const textOf = (el) => (el.innerText || el.textContent || '').trim();
 
@@ -73,7 +79,8 @@ window.KQPDom = (() => {
     // ронять весь поиск: пробуем следующий признак.
     const tryAll = (sel) => {
       try {
-        return [...document.querySelectorAll(sel)].filter(visible);
+        return [...document.querySelectorAll(sel)]
+          .filter(el => visible(el) && !ours(el));
       } catch (e) {
         return [];
       }

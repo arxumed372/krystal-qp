@@ -6,6 +6,7 @@ window.KQPPanel = (() => {
   const S = window.KQPSettings;
   const T = window.KQPTeach;
   const A = window.KQPActions;
+  const D = window.KQPDom;
 
   let root = null, cfg = null, statusEl = null;
   let amount = null, width = null, shape = null, gap = null;
@@ -29,7 +30,7 @@ window.KQPPanel = (() => {
   .kqp .go { width:100%; padding:9px; font-weight:600; background:#2563eb;
              border-color:#2563eb; color:#fff; }
   .kqp .go:hover { background:#1d4ed8; }
-  .kqp .teach { width:100%; }
+  .kqp .teach, .kqp .probe, .kqp .reset { font-size:12px; }
   .kqp .st { font-size:11.5px; color:#94a3b8; min-height:30px; white-space:pre-wrap;
              word-break:break-word; }
   .kqp .st.err { color:#fca5a5; }
@@ -92,6 +93,38 @@ window.KQPPanel = (() => {
     }
   }
 
+  // Проверка без записи. Показывает, ЧТО расширение видит на странице,
+  // и ничего не трогает. Нужна, чтобы первое знакомство не стоило денег.
+  function probe() {
+    try {
+      const auto = D.autoFields();
+      const f = (cfg.fields && cfg.fields.minPrice) ? cfg.fields : auto;
+      if (!f) {
+        status('полей не вижу. Открой «Add Liquidity» → вкладка Manual', 'err');
+        return;
+      }
+      const val = (d) => { const el = d && D.find(d); return el ? el.value : null; };
+      const src = A.currentPrice(f);
+      const amtEl = f.amount && D.find(f.amount);
+      status(
+        `низ: ${val(f.minPrice) ?? 'НЕ ВИЖУ'}\n` +
+        `верх: ${val(f.maxPrice) ?? 'НЕ ВИЖУ'}\n` +
+        `цена: ${src ? A.round(src.price) + ' (' + src.src + ')' : 'НЕ ВИЖУ'}\n` +
+        `поле суммы: ${amtEl ? 'нашёл' : 'пока не одно — станет одним после сужения'}\n` +
+        `источник полей: ${(cfg.fields && cfg.fields.minPrice) ? 'обучение мышью' : 'сам'}`,
+        src ? 'ok' : 'err');
+    } catch (e) {
+      status(e.message, 'err');
+    }
+  }
+
+  // Сброс выученного. Нужен, если при обучении показали не то: сохранённые
+  // поля имеют приоритет над самостоятельным поиском и молча его перебивают.
+  async function reset() {
+    cfg = await S.save({ fields: null });
+    status('выученные поля стёр — теперь ищу сам', 'ok');
+  }
+
   function teach() {
     status('показывай поля мышью…');
     T.start(async (fields, err) => {
@@ -99,7 +132,7 @@ window.KQPPanel = (() => {
       cfg = await S.save({ fields });
       status(fields.price
         ? 'запомнил все четыре: сумма, границы и надпись с ценой'
-        : 'запомнил три поля. Надпись с ценой пропущена — можно жать только ' +
+        : 'границы запомнил. Строка с ценой пропущена — можно жать только ' +
           'один раз подряд, иначе диапазон уедет', fields.price ? 'ok' : 'err');
     });
   }
@@ -142,7 +175,11 @@ window.KQPPanel = (() => {
         <div><div class="lbl">ширина %</div><div class="row" id="kqp-w"></div></div>
         <div><div class="lbl">отступ от цены %</div><div class="row" id="kqp-g"></div></div>
         <button class="go">Заполнить</button>
-        <button class="teach">Указать поля</button>
+        <div class="row">
+          <button class="probe" style="flex:1">Проверить</button>
+          <button class="teach" style="flex:1">Указать поля</button>
+          <button class="reset">Сброс</button>
+        </div>
         <div class="st"></div>
       </div>`;
     document.body.appendChild(root);
@@ -166,6 +203,8 @@ window.KQPPanel = (() => {
     drawShapes();
     root.querySelector('.go').onclick = go;
     root.querySelector('.teach').onclick = teach;
+    root.querySelector('.probe').onclick = probe;
+    root.querySelector('.reset').onclick = reset;
     root.querySelector('.x').onclick = () => root.remove();
     drag(root.querySelector('header'), root);
 

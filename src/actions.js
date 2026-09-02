@@ -97,10 +97,17 @@ window.KQPActions = (() => {
       }
       report('поля определил сам');
     }
-    for (const k of ['minPrice', 'maxPrice']) {
-      if (!D.find(fields[k])) {
-        throw new Error(`не нахожу ${k} на странице — открой окно Add Liquidity ` +
-                        'или переобучи поля');
+    // Самолечение. Выученные поля могли устареть или быть показаны неверно.
+    // Если они не находятся — молча падать нельзя, но и упираться в них тоже:
+    // пробуем найти сами и говорим об этом.
+    if (!D.find(fields.minPrice) || !D.find(fields.maxPrice)) {
+      const auto = D.autoFields();
+      if (auto && D.find(auto.minPrice) && D.find(auto.maxPrice)) {
+        fields = auto;
+        report('выученные поля не нашлись — нашёл сам');
+      } else {
+        throw new Error('не нахожу поля границ. Открой «Add Liquidity» → ' +
+                        'вкладка Manual, либо нажми «Сброс» и потом «Заполнить»');
       }
     }
 

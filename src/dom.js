@@ -54,7 +54,7 @@ window.KQPDom = (() => {
     let node = el;
     while (node && node.nodeType === 1 && parts.length < 12) {
       const tag = node.tagName.toLowerCase();
-      if (node.id) { parts.unshift(`#${node.id}`); break; }
+      if (node.id) { parts.unshift('#' + cssEscape(node.id)); break; }
       const parent = node.parentElement;
       if (!parent) { parts.unshift(tag); break; }
       const same = [...parent.children].filter(c => c.tagName === node.tagName);
@@ -69,17 +69,28 @@ window.KQPDom = (() => {
   // случайное поле, в которое уйдут деньги.
   function find(d) {
     if (!d) return null;
-    const tryAll = (sel) => [...document.querySelectorAll(sel)].filter(visible);
+    // Любой селектор может оказаться недопустимым — тогда это НЕ повод
+    // ронять весь поиск: пробуем следующий признак.
+    const tryAll = (sel) => {
+      try {
+        return [...document.querySelectorAll(sel)].filter(visible);
+      } catch (e) {
+        return [];
+      }
+    };
 
+    // В значении атрибута экранируем только кавычку и слэш: оно стоит
+    // внутри кавычек, и полное CSS-экранирование там неуместно.
+    const q = (v) => String(v).replace(/["\\]/g, '\\$&');
     for (const a of ['data-testid', 'data-test', 'name', 'id']) {
       if (d[a]) {
-        const hit = tryAll(`${d.tag}[${a}="${cssEscape(d[a])}"]`);
+        const hit = tryAll(`${d.tag}[${a}="${q(d[a])}"]`);
         if (hit.length === 1) return hit[0];
       }
     }
     for (const a of ['aria-label', 'placeholder']) {
       if (d[a]) {
-        const hit = tryAll(`${d.tag}[${a}="${cssEscape(d[a])}"]`);
+        const hit = tryAll(`${d.tag}[${a}="${q(d[a])}"]`);
         if (hit.length === 1) return hit[0];
       }
     }
@@ -94,7 +105,13 @@ window.KQPDom = (() => {
     return null;
   }
 
-  const cssEscape = (s) => String(s).replace(/["\\]/g, '\\$&');
+  // Экранирование по правилам CSS. Своей заменой кавычек тут не обойтись:
+  // React 18 выдаёт идентификаторы вида ":ro0:", и селектор
+  // "#chakra-modal--body-:ro0:" браузер отвергает целиком как недопустимый.
+  // Именно на этом расширение упало у владельца на живом сайте.
+  const cssEscape = (v) => (window.CSS && CSS.escape)
+    ? CSS.escape(String(v))
+    : String(v).replace(/[^\w-]/g, ch => '\\' + ch);
 
   // ── Запись в поле React ─────────────────────────────────────────────────
   //

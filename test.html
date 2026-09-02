@@ -13,6 +13,9 @@
       и делается: тогда позиция входит одним USDG.
 -->
 <body style="font:14px system-ui;background:#0b1220;color:#e2e8f0;padding:18px">
+<!-- Идентификатор в стиле React 18 / Chakra: именно на таком расширение
+     упало у владельца — "#chakra-modal--body-:ro0:" недопустим в CSS. -->
+<div id="chakra-modal--body-:ro0:">
 
 <h3>Add liquidity — JINQIAN/USDG</h3>
 
@@ -54,6 +57,7 @@
   </div>
 </div>
 
+</div>
 <script>
 // Управляемые поля: значение живёт в состоянии, как в React.
 const PRICE = 0.009975;

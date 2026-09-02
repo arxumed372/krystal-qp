@@ -8,7 +8,7 @@ window.KQPPanel = (() => {
   const A = window.KQPActions;
   const D = window.KQPDom;
 
-  let root = null, cfg = null, statusEl = null;
+  let root = null, cfg = null, statusEl = null, stopHold = null;
   let amount = null, width = null, shape = null, gap = null;
 
   const css = `
@@ -130,7 +130,21 @@ window.KQPPanel = (() => {
                'второй раз подряд не жми, диапазон уедет. Покажи надпись ' +
                'с ценой через «Указать поля»', 'err');
       } else {
-        status(line + '\nготово — жми Add Liquidity сам', 'ok');
+        status(line + '\nготово — жми Add Liquidity сам\nслежу за суммой 20 с…');
+        // Держим сумму ещё двадцать секунд: сайт любит подставить своё
+        // через семь секунд и позже, когда догрузит данные пула.
+        if (stopHold) stopHold();
+        stopHold = A.holdAmount(cfg, r.fields, amount, 20, (e) => {
+          if (e.done) {
+            status(line + (e.fixes
+              ? `\nготово. Сайт ${e.fixes} раз(а) менял сумму, я возвращал — ` +
+                'проверь поле глазами и жми Add Liquidity'
+              : '\nготово — жми Add Liquidity сам'),
+              e.fixes ? 'err' : 'ok');
+          } else {
+            status(line + `\nсайт поставил ${e.was} — вернул ${amount}`, 'err');
+          }
+        });
       }
       await S.save({ lastAmount: amount, lastWidth: width, lastShape: shape,
                      lastGap: gap });

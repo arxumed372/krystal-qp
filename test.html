@@ -113,6 +113,13 @@ document.getElementById('add').addEventListener('click', () => {
 // поле STRATTON исчезло с экрана, но расширение всё равно считало поля.
 // Сайт подставляет свою сумму с задержкой — ровно это поведение и подвело.
 window.OVERWRITE = 0;   // сколько раз ещё перепишет
+// ПОЗДНЯЯ подстановка: сайт дожидается данных пула и правит сумму через
+// несколько секунд — именно это проскакивало мимо короткого ожидания.
+window.lateOverwrite = (afterMs, value) => setTimeout(() => {
+  state.amtUsdg = String(value);
+  const el = usdgBox.querySelector('input');
+  el.value = String(value);
+}, afterMs);
 els.amtUsdg.addEventListener('input', () => {
   if (window.OVERWRITE > 0 && state.amtUsdg !== '430.74') {
     window.OVERWRITE--;

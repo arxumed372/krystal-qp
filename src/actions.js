@@ -197,14 +197,16 @@ window.KQPActions = (() => {
     // о 250, а в поле стояло 100 — ровно это.
     // Поэтому поле ищется ЗАНОВО перед каждой записью и перед каждым
     // чтением, и обязано быть частью живого документа.
-    const lo0 = D.find(fields.minPrice);
-    const hi0 = D.find(fields.maxPrice);
     const amountEl = () => {
       if (cfg.fields && cfg.fields.amount) {
         const el = D.find(cfg.fields.amount);
         if (el && document.contains(el)) return el;
       }
-      return D.amountInput([lo0, hi0].filter(Boolean));
+      // Поля границ тоже ищем ЗАНОВО: они перерисовываются вместе с суммой,
+      // и сохранённые ссылки на них перестают что-либо исключать.
+      const skip = [D.find(fields.minPrice), D.find(fields.maxPrice)]
+        .filter(Boolean);
+      return D.amountInput(skip);
     };
     const amtEl = amountEl();
     if (!amtEl) {
@@ -250,7 +252,41 @@ window.KQPActions = (() => {
       return last ? D.num(last.value) : null;
     };
     report(`сумма ${amount}…`);
-    const amountFinal = await writeAmount();
+    let amountFinal = await writeAmount();
+
+    // СТОРОЖ ПОСЛЕ ЗАПИСИ.
+    //
+    // Krystal подставляет своё число не сразу: он дожидается загрузки данных
+    // пула и только потом пересчитывает депозит. Ожидание в 900 мс это
+    // пропускало — расширение отчитывалось «готово», а через пару секунд в
+    // поле стояло 393. Поэтому после успеха ещё несколько секунд смотрим,
+    // не переписал ли сайт, и возвращаем своё.
+    const ok = (v) => v != null && amount > 0 &&
+                      Math.abs(v - amount) / amount <= 0.001;
+    if (ok(amountFinal)) {
+      for (let round = 0; round < 3; round++) {
+        let changed = false;
+        for (let t = 0; t < 10; t++) {          // ~4 секунды наблюдения
+          await sleep(400);
+          const el = amountEl();
+          const now = el ? D.num(el.value) : null;
+          if (!ok(now)) {
+            report(`сайт поставил ${now} — возвращаю ${amount}`);
+            const again = amountEl();
+            if (again) {
+              D.setReactValue(again, amount);
+              D.pressEnter(again);
+              await settle(fields, { timeout: cfg.settleMs * 4 });
+            }
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) break;                    // тишина — значит устоялось
+      }
+      const last = amountEl();
+      amountFinal = last ? D.num(last.value) : amountFinal;
+    }
 
     const got = {
       amount: amountFinal,
@@ -270,6 +306,7 @@ window.KQPActions = (() => {
       // Главная проверка формы «вниз»: верхняя граница обязана оказаться
       // НИЖЕ цены, иначе второй токен всё ещё нужен и смысл теряется.
       oneSided: got.hi != null && got.hi < price,
+      fields,
     };
   }
 
@@ -307,5 +344,40 @@ window.KQPActions = (() => {
     return { before, after, touched };
   }
 
-  return { fill, currentPrice, round, bounds, ensureManual, submit, nudge };
+  // Наблюдение ПОСЛЕ отчёта.
+  //
+  // Krystal подставляет своё число иногда через семь секунд и позже — уже
+  // после того, как расширение сказало «готово». Внутри одного заполнения
+  // столько ждать нельзя, поэтому панель продолжает смотреть отдельно:
+  // возвращает сумму, если её подменили, и говорит об этом.
+  function holdAmount(cfg, fields, amount, seconds, onEvent) {
+    const ok = (v) => v != null && amount > 0 &&
+                      Math.abs(v - amount) / amount <= 0.001;
+    const find = () => {
+      if (cfg.fields && cfg.fields.amount) {
+        const el = D.find(cfg.fields.amount);
+        if (el && document.contains(el)) return el;
+      }
+      const skip = [D.find(fields.minPrice), D.find(fields.maxPrice)]
+        .filter(Boolean);
+      return D.amountInput(skip);
+    };
+    let left = Math.round(seconds * 1000 / 400);
+    let fixes = 0;
+    const id = setInterval(() => {
+      if (--left <= 0) { clearInterval(id); onEvent({ done: true, fixes }); return; }
+      const el = find();
+      const now = el ? D.num(el.value) : null;
+      if (ok(now)) return;
+      if (!el) return;
+      fixes++;
+      D.setReactValue(el, amount);
+      D.pressEnter(el);
+      onEvent({ was: now, fixes });
+    }, 400);
+    return () => clearInterval(id);
+  }
+
+  return { fill, currentPrice, round, bounds, ensureManual, submit, nudge,
+           holdAmount };
 })();

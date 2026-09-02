@@ -213,13 +213,32 @@ window.KQPDom = (() => {
   // Кнопка подтверждения. Ищем по точному тексту: «Add Liquidity» или
   // «Approve USDG» на первом заходе. Нажимать что-то похожее нельзя —
   // это кнопка, после которой кошелёк просит подпись.
+  // Окно Add Liquidity. За ним на странице лежит вторая кнопка «Add Liquidity»
+  // — та, которой окно открывают. Владелец на неё и напоролся: расширение
+  // увидело две и честно отказалось нажимать. Ищем только внутри окна.
+  function modalRoot() {
+    const anchor = inputNear(/min\s*price/i);
+    let n = anchor;
+    while (n && n !== document.body) {
+      const id = n.id || '';
+      const cls = typeof n.className === 'string' ? n.className : '';
+      if ((n.getAttribute && n.getAttribute('role') === 'dialog') ||
+          /modal|dialog|drawer/i.test(id) || /modal|dialog|drawer/i.test(cls)) {
+        return n;
+      }
+      n = n.parentElement;
+    }
+    return null;
+  }
+
   function submitButton() {
-    const btns = allVisible('button').filter(el => {
+    const root = modalRoot();
+    const btns = allVisible('button', root || document).filter(el => {
       const t = textOf(el).replace(/\s+/g, ' ').trim();
       return /^add liquidity$/i.test(t) || /^approve\b/i.test(t);
     });
     if (btns.length !== 1) return { el: null, why: btns.length
-      ? 'таких кнопок несколько — не понимаю, какая нужна'
+      ? `кнопок «Add Liquidity» видно ${btns.length} — не понимаю, какая нужна`
       : 'кнопки Add Liquidity не вижу' };
     const el = btns[0];
     const off = el.disabled ||
@@ -227,6 +246,46 @@ window.KQPDom = (() => {
                 getComputedStyle(el).pointerEvents === 'none';
     if (off) return { el: null, why: `кнопка «${textOf(el)}» неактивна` };
     return { el, why: null, text: textOf(el).replace(/\s+/g, ' ').trim() };
+  }
+
+  // ── В каких единицах показана цена ──────────────────────────────────────
+  //
+  // Над графиком стоит переключатель из двух названий токенов. Выбранное имя
+  // становится ЗНАМЕНАТЕЛЕМ: при выбранном USDG строка читается «367.17
+  // STRATTON per USDG», при выбранном STRATTON — «0.002724 USDG per STRATTON».
+  // Владельцу нужен второй вид: цена монеты в долларах, привычные числа.
+  const STABLE = /^(usdg|usdc|usdt|dai|usde|usdc\.e)$/i;
+
+  function priceUnits() {
+    const node = priceNode();
+    if (!node) return null;
+    const m = textOf(node).replace(/\s+/g, ' ')
+      .match(/current\s+price\s+[\d.,]+\s+([\w.]+)\s+per\s+([\w.]+)/i);
+    if (!m) return null;
+    return { unit: m[1], per: m[2] };            // «unit за один per»
+  }
+
+  // Годится, когда цена выражена В СТЕЙБЛЕ: «USDG per STRATTON».
+  function priceIsStable() {
+    const u = priceUnits();
+    return u ? STABLE.test(u.unit) : null;
+  }
+
+  // Нажать нужное имя токена. Возвращает, что сделали, — молчаливое
+  // переключение денег не должно происходить незаметно.
+  function switchPriceUnits() {
+    const u = priceUnits();
+    if (!u) return { ok: false, why: 'строку Current Price не разобрал' };
+    if (STABLE.test(u.unit)) return { ok: true, changed: false, units: u };
+    // Сейчас знаменатель — стейбл, а нам нужен обратный вид. Жмём имя
+    // НЕстейбла: выбранное имя как раз и становится знаменателем.
+    const want = STABLE.test(u.per) ? u.unit : u.per;
+    const btn = allVisible('button, [role="tab"], [role="radio"]')
+      .find(el => textOf(el).replace(/\s+/g, ' ').trim().toUpperCase()
+                  === want.toUpperCase());
+    if (!btn) return { ok: false, why: `кнопки «${want}» над графиком не нашёл` };
+    btn.click();
+    return { ok: true, changed: true, clicked: want };
   }
 
   function autoFields() {
@@ -244,5 +303,5 @@ window.KQPDom = (() => {
 
   return { visible, textOf, describe, find, setReactValue, pressEnter, num,
            snapshot, nearbyLabel, autoFields, manualTab, priceNode, amountInput,
-           submitButton };
+           submitButton, modalRoot, priceUnits, priceIsStable, switchPriceUnits };
 })();

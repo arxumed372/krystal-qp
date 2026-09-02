@@ -133,6 +133,21 @@ window.KQPActions = (() => {
 
     ensureManual();
 
+    // Единицы цены переключаем ДО расчёта. Если этого не сделать, границы
+    // считаются в одних единицах, а поля живут в других, и числа выходят
+    // перевёрнутыми — вместо «около цены» получится «в тысячу раз мимо».
+    const unitsBefore = D.priceUnits();
+    const sw = D.switchPriceUnits();
+    if (sw.changed) {
+      report('переключил цену в доллары…');
+      await settle(fields, { timeout: cfg.settleMs * 6 });
+    }
+    if (D.priceIsStable() === false) {
+      throw new Error('цена показана не в стейбле' +
+        (sw.why ? ` (${sw.why})` : '') +
+        '. Нажми над графиком имя монеты сам и повтори');
+    }
+
     const src = currentPrice(fields);
     if (!src) {
       throw new Error('не вижу текущую цену. Открой окно так, чтобы была видна ' +
@@ -189,7 +204,9 @@ window.KQPActions = (() => {
       ? null : Math.abs(a - b) / Math.abs(b) * 100;
 
     return {
-      asked: { amount, lo, hi, price, widthPct, gapPct, shape, priceSrc: src.src },
+      asked: { amount, lo, hi, price, widthPct, gapPct, shape, priceSrc: src.src,
+               units: D.priceUnits(), unitsSwitched: !!sw.changed,
+               unitsBefore },
       got,
       drift: { amount: off(got.amount, amount), lo: off(got.lo, lo),
                hi: off(got.hi, hi) },

@@ -15,19 +15,24 @@
 <body style="font:14px system-ui;background:#0b1220;color:#e2e8f0;padding:18px">
 <!-- Идентификатор в стиле React 18 / Chakra: именно на таком расширение
      упало у владельца — "#chakra-modal--body-:ro0:" недопустим в CSS. -->
-<div id="chakra-modal--body-:ro0:">
+<!-- Кнопка, которой окно открывают: лежит ЗА окном. Владелец на неё
+     напоролся — расширение видело две кнопки и отказывалось нажимать. -->
+<button id="bgAdd">Add Liquidity</button>
+<div id="chakra-modal--body-:ro0:" role="dialog">
 
 <h3>Add liquidity — JINQIAN/USDG</h3>
 
 <div style="display:flex;gap:30px;flex-wrap:wrap">
   <div style="min-width:330px">
-    <div>Price Range</div>
+    <div>Price Range
+      <button id="unitA">USDG</button><button id="unitB">JINQIAN</button>
+    </div>
     <div style="margin:10px 0">
       <button id="narrow">Narrow Range</button>
       <button id="wide">Wide Range</button>
       <button id="full">Full Range</button>
     </div>
-    <div id="cur">Current Price 0.009975 USDG per JINQIAN</div>
+    <div id="cur">Current Price 100.25 JINQIAN per USDG</div>
 
     <div style="margin-top:12px">
       <div>Min Price</div>
@@ -88,6 +93,9 @@ manual.onclick = () => { manual.setAttribute('aria-selected','true');
 zap.onclick = () => { zap.setAttribute('aria-selected','true');
                       manual.setAttribute('aria-selected','false'); };
 
+// Выбранное имя становится знаменателем — как на настоящем сайте.
+unitA.onclick = () => { cur.textContent = 'Current Price 100.25 JINQIAN per USDG'; };
+unitB.onclick = () => { cur.textContent = 'Current Price 0.009975 USDG per JINQIAN'; };
 window.clicked = null;
 document.getElementById('add').addEventListener('click', () => {
   window.clicked = document.getElementById('add').textContent;

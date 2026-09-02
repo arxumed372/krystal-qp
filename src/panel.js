@@ -36,6 +36,7 @@ window.KQPPanel = (() => {
   .kqp .st.err { color:#fca5a5; }
   .kqp .st.ok { color:#86efac; }
   .kqp .x { cursor:pointer; color:#64748b; }
+  .kqp .ver { color:#64748b; font-weight:400; font-size:11px; }
   `;
 
   function status(text, kind) {
@@ -61,15 +62,26 @@ window.KQPPanel = (() => {
       const r = await A.fill({ amount, widthPct: width, shape, gapPct: gap },
                              cfg, m => status(m));
       const d = r.drift;
-      const bad = ['amount', 'lo', 'hi'].filter(k => d[k] == null || d[k] > 1);
+      // Границы Uniswap V4 садятся на ближайший тик, и точного попадания
+      // не бывает по устройству. У владельца пул с комиссией 6%, там шаг
+      // особенно крупный: просишь отступ 3%, получаешь около 2%. Поэтому
+      // по границам тревожим только при БОЛЬШОМ расхождении, а по сумме —
+      // при любом, там подмена означала бы не ту сумму денег.
+      const bad = [];
+      if (d.amount == null || d.amount > 1) bad.push('сумму');
+      if (d.lo == null || d.lo > 25) bad.push('низ');
+      if (d.hi == null || d.hi > 25) bad.push('верх');
+      const pct = (v) => (v == null || !r.asked.price) ? '—'
+        : ((v / r.asked.price - 1) * 100).toFixed(1) + '%';
       const line = `сумма ${r.got.amount ?? '—'}\n` +
-                   `диапазон ${r.got.lo ?? '—'} … ${r.got.hi ?? '—'}\n` +
-                   `(просил ${A.round(r.asked.lo)} … ${A.round(r.asked.hi)})\n` +
-                   `цена ${A.round(r.asked.price)} — ${r.asked.priceSrc}`;
+                   `низ ${pct(r.got.lo)}, верх ${pct(r.got.hi)} от цены\n` +
+                   `${r.got.lo ?? '—'} … ${r.got.hi ?? '—'}\n` +
+                   `(просил ${(-r.asked.widthPct).toFixed(0)}% и ` +
+                   `${(-r.asked.gapPct).toFixed(0)}%; сайт садит на свой шаг)`;
       if (bad.length) {
         // Расхождение не прячем. Приложение могло переписать границы —
         // владелец должен увидеть это ДО подписи, а не после.
-        status(line + `\nВНИМАНИЕ: сайт изменил ${bad.join(', ')} — проверь перед подписью`, 'err');
+        status(line + `\nВНИМАНИЕ: сайт сильно изменил ${bad.join(', ')} — проверь перед подписью`, 'err');
       } else if (shape === 'down' && !r.oneSided) {
         // Ради этого всё и делается: верх обязан оказаться НИЖЕ цены,
         // иначе позиция снова двусторонняя и нужен второй токен.
@@ -168,7 +180,7 @@ window.KQPPanel = (() => {
     root = document.createElement('div');
     root.className = 'kqp';
     root.innerHTML = `
-      <header><span>Krystal QP</span><span class="x" title="скрыть">✕</span></header>
+      <header><span>Krystal QP <span class="ver"></span></span><span class="x" title="скрыть">✕</span></header>
       <div class="body">
         <div><div class="lbl">сумма</div><div class="row" id="kqp-a"></div></div>
         <div><div class="lbl">форма</div><div class="row" id="kqp-s"></div></div>
@@ -184,6 +196,13 @@ window.KQPPanel = (() => {
       </div>`;
     document.body.appendChild(root);
 
+    // Номер версии в заголовке. Без него не отличить обновлённую сборку от
+    // старой: Chrome держит расширение в памяти, пока не нажмёшь обновление
+    // на карточке, и правки выглядят как «опять та же ошибка».
+    try {
+      root.querySelector('.ver').textContent =
+        'v' + chrome.runtime.getManifest().version;
+    } catch (e) { /* вне расширения версии нет — не беда */ }
     statusEl = root.querySelector('.st');
     chips(root.querySelector('#kqp-a'), cfg.amounts, '', () => amount, v => amount = v);
     chips(root.querySelector('#kqp-w'), cfg.widths, '%', () => width, v => width = v);

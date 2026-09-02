@@ -299,6 +299,22 @@ window.KQPPanel = (() => {
 
     // Поля определяются сами по подписям Min Price / Max Price. Показ мышью
     // остался запасным путём на случай, если Krystal переделает разметку.
+    // Единицы цены переключаем СРАЗУ, как только открылось окно, а не в
+    // момент заполнения. Владелец заметил, что цена меняется не сразу —
+    // потому что раньше это делалось внутри «Заполнить», уже после нажатия.
+    let switched = false;
+    setInterval(() => {
+      const open = !!D.dialogRoot();
+      if (!open) { switched = false; return; }   // окно закрыли — забываем
+      if (switched) return;
+      const st = D.priceIsStable();
+      if (st === null) return;                   // строки цены ещё нет
+      switched = true;
+      if (st) return;                            // уже в долларах, не трогаем
+      const r = D.switchPriceUnits();
+      if (r.changed) status('переключил цену в доллары', 'ok');
+    }, 700);
+
     status(cfg.fields
       ? 'поля выучены мышью — можно заполнять'
       : 'открой «Add Liquidity» → Manual и жми «Заполнить», поля найду сам');

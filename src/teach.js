@@ -12,6 +12,12 @@ window.KQPTeach = (() => {
     { key: 'amount', title: 'поле СУММЫ', hint: 'кликни поле, куда вводишь сумму' },
     { key: 'minPrice', title: 'поле НИЖНЕЙ границы', hint: 'кликни поле Min Price' },
     { key: 'maxPrice', title: 'поле ВЕРХНЕЙ границы', hint: 'кликни поле Max Price' },
+    // Необязательный, но важный. Без него цена берётся как середина границ,
+    // а она верна ТОЛЬКО до первого заполнения: после него границы уже
+    // сдвинуты, и второе нажатие уехало бы ещё ниже, третье ещё ниже.
+    // Здесь показывается не поле ввода, а надпись с текущей ценой.
+    { key: 'price', title: 'НАДПИСЬ с текущей ценой', optional: true,
+      hint: 'кликни по числу текущей цены (или Enter — пропустить)' },
   ];
 
   let overlay = null;
@@ -45,6 +51,13 @@ window.KQPTeach = (() => {
       e.preventDefault();
       stop();
       if (onDone) onDone(null, 'обучение отменено');
+      return;
+    }
+    // Пропуск необязательного шага.
+    if (e.key === 'Enter' && queue[0] && queue[0].optional) {
+      e.preventDefault();
+      queue.shift();
+      if (!queue.length) { stop(); if (onDone) onDone(learned, null); }
     }
   }
 
@@ -52,9 +65,17 @@ window.KQPTeach = (() => {
     const el = e.target;
     // Показывать надо именно поле ввода. Промах по контейнеру — частая
     // ошибка, и молча принять её нельзя: запомнится не то.
-    const input = el.closest && el.closest('input, textarea, [contenteditable="true"]');
+    const step0 = queue[0];
+    // Для цены годится любой элемент с числом: это надпись, а не поле.
+    const input = (step0 && step0.key === 'price')
+      ? el
+      : (el.closest && el.closest('input, textarea, [contenteditable="true"]'));
     if (!input) {
       banner('это не поле ввода — кликни прямо по полю');
+      return;
+    }
+    if (step0 && step0.key === 'price' && D.num(D.textOf(input)) == null) {
+      banner('в этом месте не видно числа — кликни прямо по цене');
       return;
     }
     e.preventDefault();

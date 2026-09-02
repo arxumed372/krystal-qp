@@ -8,7 +8,7 @@ window.KQPPanel = (() => {
   const A = window.KQPActions;
 
   let root = null, cfg = null, statusEl = null;
-  let amount = null, width = null;
+  let amount = null, width = null, shape = null;
 
   const css = `
   .kqp { position:fixed; right:16px; bottom:16px; z-index:2147483646;
@@ -57,20 +57,29 @@ window.KQPPanel = (() => {
   async function go() {
     try {
       status('заполняю…');
-      const r = await A.fill({ amount, widthPct: width }, cfg, m => status(m));
+      const r = await A.fill({ amount, widthPct: width, shape }, cfg, m => status(m));
       const d = r.drift;
       const bad = ['amount', 'lo', 'hi'].filter(k => d[k] == null || d[k] > 1);
       const line = `сумма ${r.got.amount ?? '—'}\n` +
                    `диапазон ${r.got.lo ?? '—'} … ${r.got.hi ?? '—'}\n` +
-                   `(просил ${A.round(r.asked.lo)} … ${A.round(r.asked.hi)})`;
+                   `(просил ${A.round(r.asked.lo)} … ${A.round(r.asked.hi)})\n` +
+                   `цена ${A.round(r.asked.price)} — ${r.asked.priceSrc}`;
       if (bad.length) {
         // Расхождение не прячем. Приложение могло переписать границы —
         // владелец должен увидеть это ДО подписи, а не после.
         status(line + `\nВНИМАНИЕ: сайт изменил ${bad.join(', ')} — проверь перед подписью`, 'err');
+      } else if (r.asked.priceSrc === 'середина границ') {
+        // Середина границ равна рыночной цене только ДО первого заполнения.
+        // После него границы уже сдвинуты, и повторное нажатие увело бы
+        // диапазон ещё ниже, а третье — ещё ниже. Молчать об этом нельзя:
+        // человек нажал бы дважды и получил не то, что видел.
+        status(line + '\nзаполнено, но цену взял как середину границ — ' +
+               'второй раз подряд не жми, диапазон уедет. Покажи надпись ' +
+               'с ценой через «Указать поля»', 'err');
       } else {
         status(line + '\nготово — проверь и подписывай сам', 'ok');
       }
-      await S.save({ lastAmount: amount, lastWidth: width });
+      await S.save({ lastAmount: amount, lastWidth: width, lastShape: shape });
     } catch (e) {
       status(e.message, 'err');
     }
@@ -81,7 +90,10 @@ window.KQPPanel = (() => {
     T.start(async (fields, err) => {
       if (err) return status(err, 'err');
       cfg = await S.save({ fields });
-      status('поля запомнил: сумма, нижняя и верхняя границы', 'ok');
+      status(fields.price
+        ? 'запомнил все четыре: сумма, границы и надпись с ценой'
+        : 'запомнил три поля. Надпись с ценой пропущена — можно жать только ' +
+          'один раз подряд, иначе диапазон уедет', fields.price ? 'ok' : 'err');
     });
   }
 
@@ -106,6 +118,7 @@ window.KQPPanel = (() => {
     cfg = await S.load();
     amount = cfg.lastAmount;
     width = cfg.lastWidth;
+    shape = cfg.lastShape;
 
     const style = document.createElement('style');
     style.textContent = css;
@@ -117,7 +130,8 @@ window.KQPPanel = (() => {
       <header><span>Krystal QP</span><span class="x" title="скрыть">✕</span></header>
       <div class="body">
         <div><div class="lbl">сумма</div><div class="row" id="kqp-a"></div></div>
-        <div><div class="lbl">диапазон ±%</div><div class="row" id="kqp-w"></div></div>
+        <div><div class="lbl">форма</div><div class="row" id="kqp-s"></div></div>
+        <div><div class="lbl">ширина %</div><div class="row" id="kqp-w"></div></div>
         <button class="go">Заполнить</button>
         <button class="teach">Указать поля</button>
         <div class="st"></div>
@@ -127,6 +141,19 @@ window.KQPPanel = (() => {
     statusEl = root.querySelector('.st');
     chips(root.querySelector('#kqp-a'), cfg.amounts, '', () => amount, v => amount = v);
     chips(root.querySelector('#kqp-w'), cfg.widths, '%', () => width, v => width = v);
+    const SHAPES = [['down', 'вниз'], ['both', '± обе'], ['up', 'вверх']];
+    const sh = root.querySelector('#kqp-s');
+    const drawShapes = () => {
+      sh.innerHTML = '';
+      for (const [k, t] of SHAPES) {
+        const b = document.createElement('button');
+        b.textContent = t;
+        if (shape === k) b.classList.add('on');
+        b.onclick = () => { shape = k; drawShapes(); };
+        sh.appendChild(b);
+      }
+    };
+    drawShapes();
     root.querySelector('.go').onclick = go;
     root.querySelector('.teach').onclick = teach;
     root.querySelector('.x').onclick = () => root.remove();

@@ -32,9 +32,20 @@ window.KQPActions = (() => {
   // Если границы пустые — цену взять неоткуда, и мы говорим об этом прямо,
   // а не подставляем выдуманное число.
   function currentPrice(fields) {
+    // 1) Надпись с ценой, если её показали. Единственный источник, который
+    //    остаётся верным ПОСЛЕ заполнения.
+    if (fields.price) {
+      const el = D.find(fields.price);
+      const v = el && D.num(D.textOf(el));
+      if (v != null && v > 0) return { price: v, src: 'надпись' };
+    }
+    // 2) Середина границ. Верна только пока границы стоят вокруг рынка,
+    //    то есть ДО первого заполнения. Помечаем источник, чтобы вызывающий
+    //    мог предупредить, а не делать вид, что знает точно.
     const lo = D.num((D.find(fields.minPrice) || {}).value);
     const hi = D.num((D.find(fields.maxPrice) || {}).value);
-    if (lo != null && hi != null && lo > 0 && hi > 0) return (lo + hi) / 2;
+    if (lo != null && hi != null && lo > 0 && hi > 0)
+      return { price: (lo + hi) / 2, src: 'середина границ' };
     return null;
   }
 
@@ -49,7 +60,7 @@ window.KQPActions = (() => {
 
   // Основной сценарий. Возвращает отчёт о том, ЧТО РЕАЛЬНО СТОИТ в полях,
   // а не о том, что мы туда отправили.
-  async function fill({ amount, widthPct }, cfg, report) {
+  async function fill({ amount, widthPct, shape = 'both' }, cfg, report) {
     const fields = cfg.fields;
     if (!fields || !fields.amount || !fields.minPrice || !fields.maxPrice) {
       throw new Error('поля не выучены — нажми «Указать поля» и покажи их мышью');
@@ -61,14 +72,27 @@ window.KQPActions = (() => {
       }
     }
 
-    const price = currentPrice(fields);
-    if (price == null) {
+    const src = currentPrice(fields);
+    const price = src && src.price;
+    if (src == null) {
       throw new Error('границы пустые — цену взять неоткуда. Открой пул так, ' +
                       'чтобы Min/Max были заполнены, и повтори');
     }
 
-    const lo = round(price * (1 - widthPct / 100));
-    const hi = round(price * (1 + widthPct / 100));
+    // Форма диапазона. При 'down' верхняя граница ставится РОВНО в текущую
+    // цену: позиция целиком ниже рынка, входит одной котируемой монетой,
+    // и верхней незаполненной части не остаётся. При 'up' — зеркально.
+    let lo, hi;
+    if (shape === 'down') {
+      lo = round(price * (1 - widthPct / 100));
+      hi = round(price);
+    } else if (shape === 'up') {
+      lo = round(price);
+      hi = round(price * (1 + widthPct / 100));
+    } else {
+      lo = round(price * (1 - widthPct / 100));
+      hi = round(price * (1 + widthPct / 100));
+    }
 
     report(`сумма ${amount}…`);
     D.setReactValue(D.find(fields.amount), amount);
@@ -95,7 +119,7 @@ window.KQPActions = (() => {
       ? null : Math.abs(a - b) / Math.abs(b) * 100;
 
     return {
-      asked: { amount, lo, hi, price, widthPct },
+      asked: { amount, lo, hi, price, widthPct, shape, priceSrc: src.src },
       got,
       drift: { amount: off(got.amount, amount), lo: off(got.lo, lo), hi: off(got.hi, hi) },
     };

@@ -43,7 +43,7 @@ window.readState = () => ({ ...state });
 <script>
 // Драйвер проверки: подставляем «выученные» поля так же, как это сделало бы
 // обучение мышью, и прогоняем сценарий.
-window.runTest = async (widthPct, hostile) => {
+window.runTest = async (widthPct, hostile, shape, usePriceLabel) => {
   window.HOSTILE = !!hostile;
   state.lo = '2.25'; state.hi = '2.75'; state.amt = '';
   els.lo.value = '2.25'; els.hi.value = '2.75'; els.amt.value = '';
@@ -54,10 +54,11 @@ window.runTest = async (widthPct, hostile) => {
       amount: D.describe(els.amt),
       minPrice: D.describe(els.lo),
       maxPrice: D.describe(els.hi),
+      ...(usePriceLabel ? { price: D.describe(document.getElementById('px')) } : {}),
     },
   };
   try {
-    const r = await window.KQPActions.fill({ amount: 100, widthPct }, cfg, () => {});
+    const r = await window.KQPActions.fill({ amount: 100, widthPct, shape: shape || 'both' }, cfg, () => {});
     return { ok: true, ...r, state: window.readState() };
   } catch (e) {
     return { ok: false, error: e.message };

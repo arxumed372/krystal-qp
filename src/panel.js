@@ -84,8 +84,21 @@ window.KQPPanel = (() => {
       set(v);
       chips(host, values, suffix, get, set);
     };
-    own.onchange = apply;
-    own.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); apply(); } };
+    // Krystal перехватывает нажатия на своей странице, и до нашего поля они
+    // не доходили — владелец не мог вписать своё значение. Гасим всплытие:
+    // нажатия внутри панели принадлежат панели, а не сайту.
+    for (const ev of ['keydown', 'keypress', 'keyup', 'input', 'paste']) {
+      own.addEventListener(ev, (e) => e.stopPropagation(), true);
+    }
+    own.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); apply(); }
+    });
+    // Применяем и по уходу из поля: не все жмут Enter.
+    own.addEventListener('blur', apply);
+    own.addEventListener('change', apply);
+    // Клик по полю не должен доходить до страницы: у Krystal свои обработчики.
+    own.addEventListener('click', (e) => e.stopPropagation(), true);
+    own.addEventListener('mousedown', (e) => e.stopPropagation(), true);
     host.appendChild(own);
   }
 

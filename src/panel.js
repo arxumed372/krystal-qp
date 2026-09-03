@@ -135,7 +135,10 @@ window.KQPPanel = (() => {
         // через семь секунд и позже, когда догрузит данные пула.
         if (stopHold) stopHold();
         stopHold = A.holdAmount(cfg, r.fields, amount, 20, (e) => {
-          if (e.done) {
+          if (e.done && e.gaveUp) {
+            status(line + `\nсайт упорно ставит ${e.was}. Больше не спорю — ` +
+                   'впиши сумму сам и проверь перед нажатием', 'err');
+          } else if (e.done) {
             status(line + (e.fixes
               ? `\nготово. Сайт ${e.fixes} раз(а) менял сумму, я возвращал — ` +
                 'проверь поле глазами и жми Add Liquidity'

@@ -232,7 +232,7 @@ window.KQPActions = (() => {
     // Поэтому: написали, подождали, перечитали, и если сайт переписал —
     // пишем снова. Три попытки, потом честный отказ.
     const writeAmount = async () => {
-      for (let attempt = 1; attempt <= 4; attempt++) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
         const el = amountEl();            // ищем заново каждый раз
         if (!el) return null;
         D.setReactValue(el, amount);
@@ -246,7 +246,7 @@ window.KQPActions = (() => {
           return now;
         }
         report(`в поле ${now} вместо ${amount} — вписываю снова ` +
-               `(${attempt} из 4)`);
+               `(${attempt} из 2)`);
       }
       const last = amountEl();
       return last ? D.num(last.value) : null;
@@ -362,19 +362,30 @@ window.KQPActions = (() => {
         .filter(Boolean);
       return D.amountInput(skip);
     };
-    let left = Math.round(seconds * 1000 / 400);
+    let left = Math.round(seconds * 1000 / 700);
     let fixes = 0;
+    // Каждая наша запись заставляет Krystal пересчитывать позицию, и на
+    // промежуточном состоянии его библиотека сыплет красными «Invariant
+    // failed». Пять исправлений подряд — это пять таких окон. Поэтому
+    // правим не больше двух раз, а дальше говорим человеку посмотреть
+    // самому: лишний шум хуже, чем честное «проверь глазами».
+    const MAX_FIXES = 2;
     const id = setInterval(() => {
       if (--left <= 0) { clearInterval(id); onEvent({ done: true, fixes }); return; }
       const el = find();
       const now = el ? D.num(el.value) : null;
       if (ok(now)) return;
       if (!el) return;
+      if (fixes >= MAX_FIXES) {
+        clearInterval(id);
+        onEvent({ done: true, fixes, gaveUp: true, was: now });
+        return;
+      }
       fixes++;
       D.setReactValue(el, amount);
       D.pressEnter(el);
       onEvent({ was: now, fixes });
-    }, 400);
+    }, 700);
     return () => clearInterval(id);
   }
 

@@ -30,9 +30,9 @@ window.KQPPanel = (() => {
   .kqp .go { width:100%; padding:9px; font-weight:600; background:#2563eb;
              border-color:#2563eb; color:#fff; }
   .kqp .go:hover { background:#1d4ed8; }
-  .kqp .goadd { width:100%; padding:9px; font-weight:600; background:#16a34a;
-                border-color:#16a34a; color:#fff; }
-  .kqp .goadd:hover { background:#15803d; }
+  .kqp .gosafe { width:100%; padding:9px; font-weight:600; background:#16a34a;
+                 border-color:#16a34a; color:#fff; font-size:12px; }
+  .kqp .gosafe:hover { background:#15803d; }
   .kqp .teach, .kqp .probe, .kqp .reset { font-size:12px; }
   .kqp .st { font-size:11.5px; color:#94a3b8; min-height:30px; white-space:pre-wrap;
              word-break:break-word; }
@@ -89,11 +89,11 @@ window.KQPPanel = (() => {
     host.appendChild(own);
   }
 
-  async function go(alsoSubmit) {
+  async function go(alsoSubmit, byButtons) {
     try {
-      status('заполняю…');
-      const r = await A.fill({ amount, widthPct: width, shape, gapPct: gap },
-                             cfg, m => status(m));
+      status(byButtons ? 'ставлю границы кнопками сайта…' : 'заполняю…');
+      const r = await A.fill({ amount, widthPct: width, shape, gapPct: gap,
+                               byButtons }, cfg, m => status(m));
       const d = r.drift;
       // Границы Uniswap V4 садятся на ближайший тик, и точного попадания
       // не бывает по устройству. У владельца пул с комиссией 6%, там шаг
@@ -243,6 +243,7 @@ window.KQPPanel = (() => {
         <div><div class="lbl">ширина %</div><div class="row" id="kqp-w"></div></div>
         <div><div class="lbl">отступ от цены %</div><div class="row" id="kqp-g"></div></div>
         <button class="go">Заполнить</button>
+        <button class="gosafe">Заполнить кнопками (без ошибок)</button>
         <div class="row">
           <button class="probe" style="flex:1">Проверить</button>
           <button class="teach" style="flex:1">Указать поля</button>
@@ -279,7 +280,8 @@ window.KQPPanel = (() => {
       }
     };
     drawShapes();
-    root.querySelector('.go').onclick = () => go(false);
+    root.querySelector('.go').onclick = () => go(false, false);
+    root.querySelector('.gosafe').onclick = () => go(false, true);
     root.querySelector('.teach').onclick = teach;
     root.querySelector('.probe').onclick = probe;
     root.querySelector('.reset').onclick = reset;

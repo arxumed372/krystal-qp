@@ -104,7 +104,65 @@ window.KQPActions = (() => {
     return { clicked: true, text: b.text };
   }
 
-  async function fill({ amount, widthPct, shape = 'down', gapPct = 3 },
+  // Установка границы КНОПКАМИ САМОГО САЙТА.
+  //
+  // Запись прямо в поле меняет только его значение. У Krystal рядом живёт
+  // график с ползунками, и его состояние строится по своему пути — от нашей
+  // записи оно не обновляется. Получается рассогласование: в поле одно, во
+  // внутреннем состоянии другое, и при нажатии Add Liquidity библиотека
+  // Uniswap выбрасывает «Invariant failed», кошелёк даже не открывается.
+  //
+  // Кнопки + и − идут через собственные обработчики сайта, поэтому состояние
+  // остаётся согласованным. Медленнее, зато работает.
+  async function stepTo(desc, target, report, name) {
+    const el0 = D.find(desc);
+    if (!el0) throw new Error(`поле «${name}» не найдено`);
+    const cur = D.num(el0.value);
+    if (cur == null || cur <= 0) throw new Error(`в поле «${name}» нет числа`);
+    const { plus, minus } = D.stepButtons(el0);
+    if (!plus || !minus) throw new Error(`кнопок + и − у «${name}» нет`);
+
+    // Шаг узнаём опытом: жмём один раз и смотрим, насколько изменилось.
+    const before = cur;
+    plus.click();
+    await sleep(420);
+    const after = D.num((D.find(desc) || el0).value);
+    if (after == null || after === before) {
+      throw new Error(`«${name}» не отзывается на кнопку шага`);
+    }
+    const stepUp = after / before;                 // множитель одной ступеньки
+    minus.click();
+    await sleep(420);
+
+    // Идём к цели с ПЕРЕСЧЁТОМ после каждой порции, а не по одной оценке.
+    // Ступенька может оказаться не такой, как я предположил по первому
+    // нажатию, и слепой отсчёт промахнётся. Останавливаемся, когда ближе
+    // цели уже не подойти — то есть когда следующий шаг уводит дальше.
+    let value = before;
+    let clicks = 0;
+    const MAX_CLICKS = 80;                         // предохранитель от петли
+    while (clicks < MAX_CLICKS) {
+      const need = Math.log(target / value) / Math.log(stepUp);
+      const whole = Math.trunc(need);
+      if (whole === 0) break;                      // ближе не станет
+      const btn = whole > 0 ? plus : minus;
+      const batch = Math.min(Math.abs(whole), 10, MAX_CLICKS - clicks);
+      report(`${name}: ${batch} шаг(ов) ${whole > 0 ? 'вверх' : 'вниз'}…`);
+      for (let i = 0; i < batch; i++) {
+        btn.click();
+        clicks++;
+        await sleep(190);
+      }
+      await sleep(380);
+      const now = D.num((D.find(desc) || el0).value);
+      if (now == null || now === value) break;     // не двигается — уходим
+      value = now;
+    }
+    return value;
+  }
+
+  async function fill({ amount, widthPct, shape = 'down', gapPct = 3,
+                        byButtons = false },
                       cfg, report) {
     // Сначала пробуем узнать поля сами — разметка известна по снимкам.
     // Выученные показом мыши имеют приоритет: их владелец видел своими глазами.
@@ -179,11 +237,16 @@ window.KQPActions = (() => {
       : [['верх', fields.maxPrice, hi], ['низ', fields.minPrice, lo]];
     if (minFirst) report('диапазон уезжает вниз — сначала нижняя граница');
     for (const [name, desc, value] of steps) {
-      report(`${name} ${value}…`);
-      const el = D.find(desc);
-      if (!el) throw new Error(`поле «${name}» пропало со страницы`);
-      D.setReactValue(el, value);
-      D.pressEnter(el);
+      if (byButtons) {
+        const got = await stepTo(desc, value, report, name);
+        report(`${name}: получилось ${got}`);
+      } else {
+        report(`${name} ${value}…`);
+        const el = D.find(desc);
+        if (!el) throw new Error(`поле «${name}» пропало со страницы`);
+        D.setReactValue(el, value);
+        D.pressEnter(el);
+      }
       await settle(fields, { timeout: cfg.settleMs * 6 });
     }
 
